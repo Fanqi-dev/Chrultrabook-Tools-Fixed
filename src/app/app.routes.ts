@@ -49,7 +49,8 @@ export const routes: Routes = [
     children: [
       {
         path: "",
-        component: KeyboardRemapComponent,
+        redirectTo: "remap",
+        pathMatch: "full",
       },
       {
         path: "remap",

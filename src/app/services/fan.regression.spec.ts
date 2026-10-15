@@ -40,4 +40,31 @@ describe("Fan profile persistence regression", () => {
     expect(service.getProfiles()[0].selected).toBeTrue();
     expect(service.getProfiles()[1].array).toEqual([40, 55, 70]);
   });
-});
+  it("keeps memory unchanged when adding a profile cannot be saved", async () => {
+    ipc.and.rejectWith("disk full");
+    await expectAsync(service.addProfile("New")).toBeRejected();
+    expect(service.getProfiles().map((item) => item.name)).toEqual(["Default", "Cooling"]);
+  });
+  it("serializes consecutive profile changes without losing either", async () => {
+    await Promise.all([service.addProfile("One"), service.addProfile("Two")]);
+    const saved = JSON.parse(ipc.calls.mostRecent().args[1].value);
+    expect(saved.map((item: any) => item.name)).toEqual(["Default", "Cooling", "One", "Two"]);
+    expect(new Set(saved.map((item: any) => item.id)).size).toBe(4);
+  });
+  it("rejects duplicate profile names and invalid deletion indices", async () => {
+    await expectAsync(service.addProfile("cooling")).toBeRejected();
+    await expectAsync(service.editProfileName(1, "Default")).toBeRejected();
+    await expectAsync(service.deleteProfile(-1)).toBeRejected();
+    expect(ipc).not.toHaveBeenCalled();
+  });
+  it("selects a remaining curve when the applied profile is deleted", async () => {
+    await service.deleteProfile(0);
+    expect(service.getProfiles()[0].name).toBe("Cooling"); expect(service.getProfiles()[0].selected).toBeTrue();
+    await expectAsync(service.deleteProfile(0)).toBeRejected();
+    expect(service.getProfiles().length).toBe(1);
+  });
+  it("does not poison later saves after an earlier write fails", async () => {
+    ipc.and.rejectWith("disk full"); await expectAsync(service.addProfile("Failed")).toBeRejected();
+    ipc.and.resolveTo(""); await service.addProfile("Working");
+    expect(service.getProfiles().map((item) => item.name)).toEqual(["Default", "Cooling", "Working"]);
+  });});

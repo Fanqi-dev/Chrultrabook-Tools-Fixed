@@ -28,18 +28,21 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci
 
-      - name: Fan editor browser regression tests
+      - name: Application browser regression tests
         run: npm run test:fan
+
+      - name: Native logic regression tests
+        run: |
+          foreach ($module in @("custom_fan", "temps", "settings_file")) {
+            rustc --test "src/$module.rs" -o "$module-tests.exe"
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            & "./$module-tests.exe"
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+        working-directory: src-tauri
 
       - name: Build app + installers (Tauri, MSVC)
         run: npm run tauri build
-
-      - name: Curve-math unit tests (B4 gate)
-        run: |
-          rustc --test src/custom_fan.rs -o fan-curve-tests.exe
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          ./fan-curve-tests.exe
-        working-directory: src-tauri
 
       - name: Upload raw exe
         uses: actions/upload-artifact@v4

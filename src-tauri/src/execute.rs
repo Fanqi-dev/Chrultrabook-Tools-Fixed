@@ -1,5 +1,7 @@
 //execute shell commands
 use tauri_plugin_shell::ShellExt;
+use std::sync::Mutex;
+static EC_ACCESS: Mutex<()> = Mutex::new(());
 
 //location of ectool excuteable
 #[cfg(target_os = "linux")]
@@ -36,23 +38,21 @@ pub async fn execute(
 
     let output = shell.command(program).args(arguments).output().await;
 
-    if reply {
-        match output {
+    match output {
             Ok(out) => {
                 if out.status.success() {
-                    return Ok(String::from_utf8(out.stdout)
-                        .unwrap_or_else(|_| "execute_failure: invalid utf8".to_string()));
+                    if !reply { return Ok(String::new()); }
+                    return String::from_utf8(out.stdout).map_err(|error| error.to_string());
                 } else {
-                    return Err(String::from_utf8(out.stderr).unwrap_or_else(|_| "N/A".to_string()));
+                    let stderr = String::from_utf8_lossy(&out.stderr);
+                    let stdout = String::from_utf8_lossy(&out.stdout);
+                    return Err(format!("Command failed: {} {}", stderr.trim(), stdout.trim()));
                 }
             }
             Err(e) => {
                 return Err(format!("Shell command error: {}", e));
             }
         }
-    }
-
-    Ok(String::new())
 }
 
 pub fn execute_relay(
@@ -70,12 +70,15 @@ pub fn execute_relay_checked(
     arguments: Vec<String>,
     reply: bool,
 ) -> Result<String, String> {
+    let _ec_guard = if wanted_program == "ectool" {
+        Some(EC_ACCESS.lock().map_err(|_| "EC access lock failed".to_string())?)
+    } else { None };
     let program = match wanted_program {
         "ectool" => ECTOOL,
         "cbmem" => CBMEM,
         "cat" => GETSYSINFO,
         "keyboard" => KEYBOARD,
-        _ => "echo",
+        _ => return Err("Unknown device tool".into()),
     };
     let output =
         tauri::async_runtime::block_on(async { execute(&handle, program, arguments, reply).await });

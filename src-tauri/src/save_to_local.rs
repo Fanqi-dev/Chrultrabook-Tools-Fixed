@@ -15,6 +15,7 @@ const MIGRATE_KEYS: &[&str] = &[
     "rgbprofiles",
     "rgb",
     "keyboard_backup",
+    "rgb_profile",
 ];
 
 static SETTINGS: Mutex<Option<Map<String, Value>>> = Mutex::new(None);
@@ -64,50 +65,39 @@ fn migrate_from_leveldb() -> Map<String, Value> {
     map
 }
 
-fn load_settings() -> Map<String, Value> {
+fn load_settings() -> Result<Map<String, Value>, String> {
     let path = settings_path();
     if path.exists() {
         match fs::read_to_string(&path) {
             Ok(text) => match serde_json::from_str::<Value>(&text) {
-                Ok(Value::Object(map)) => return map,
-                _ => {}
+                Ok(Value::Object(map)) => return Ok(map),
+                _ => return Err(format!("Invalid settings JSON at {}. File preserved.", path.display())),
             },
-            Err(_) => {}
+            Err(error) => return Err(error.to_string()),
         }
     }
 
-    // First run (or corrupt file): one-time migrate from old LevelDB storage.
+    // Migrate only when no settings file exists; never overwrite corrupt data.
     let migrated = migrate_from_leveldb();
-    if let Some(parent) = path.parent() {
-        let _ = fs::create_dir_all(parent);
-    }
-    let _ = fs::write(
-        &path,
-        serde_json::to_string_pretty(&Value::Object(migrated.clone()))
-            .unwrap_or_else(|_| "{}".into()),
-    );
-    migrated
+    persist(&migrated)?;
+    Ok(migrated)
 }
 
-fn with_settings<F, R>(f: F) -> R
+fn with_settings<F, R>(f: F) -> Result<R, String>
 where
-    F: FnOnce(&mut Map<String, Value>) -> R,
+    F: FnOnce(&mut Map<String, Value>) -> Result<R, String>,
 {
     let mut guard = SETTINGS.lock().unwrap_or_else(|e| e.into_inner());
     if guard.is_none() {
-        *guard = Some(load_settings());
+        *guard = Some(load_settings()?);
     }
     f(guard.as_mut().unwrap())
 }
 
-fn persist(map: &Map<String, Value>) {
+fn persist(map: &Map<String, Value>) -> Result<(), String> {
     let path = settings_path();
-    if let Some(parent) = path.parent() {
-        let _ = fs::create_dir_all(parent);
-    }
-    if let Ok(text) = serde_json::to_string_pretty(&Value::Object(map.clone())) {
-        let _ = fs::write(path, text);
-    }
+    let text = serde_json::to_vec_pretty(&Value::Object(map.clone())).map_err(|error| error.to_string())?;
+    crate::settings_file::atomic_write(&path, &text).map_err(|error| error.to_string())
 }
 
 fn value_to_string(v: &Value) -> String {
@@ -120,28 +110,33 @@ fn value_to_string(v: &Value) -> String {
 
 /// Drop-in replacement for the old LevelDB-backed local_storage.
 /// Signature unchanged: function is "get" | "save" | "remove" | "clear".
-pub fn local_storage(function: &str, option: &str, value: &str) -> String {
+pub fn local_storage(function: &str, option: &str, value: &str) -> Result<String, String> {
     match function {
         "get" => with_settings(|map| {
-            map.get(option)
+            Ok(map.get(option)
                 .map(value_to_string)
-                .unwrap_or_default()
+                .unwrap_or_default())
         }),
         "save" => with_settings(|map| {
-            map.insert(option.to_string(), Value::String(value.to_string()));
-            persist(map);
-            String::new()
+            let mut next = map.clone();
+            next.insert(option.to_string(), Value::String(value.to_string()));
+            persist(&next)?;
+            *map = next;
+            Ok(String::new())
         }),
         "remove" => with_settings(|map| {
-            map.remove(option);
-            persist(map);
-            String::new()
+            let mut next = map.clone();
+            next.remove(option);
+            persist(&next)?;
+            *map = next;
+            Ok(String::new())
         }),
         "clear" => with_settings(|map| {
-            map.clear();
-            persist(map);
-            String::new()
+            let next = Map::new();
+            persist(&next)?;
+            *map = next;
+            Ok(String::new())
         }),
-        _ => String::new(),
+        _ => Err("Unknown settings operation".into()),
     }
 }

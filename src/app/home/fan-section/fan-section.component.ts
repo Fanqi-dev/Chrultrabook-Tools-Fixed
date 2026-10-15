@@ -4,6 +4,7 @@ import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { invoke } from "@tauri-apps/api/core";
 import { UnlistenFn } from "@tauri-apps/api/event";
 import { AUTO_FAN_CURVE, FanCurveRequest, validCurve } from "../../services/fan-control";
+import { zoomScale } from "../../services/device";
 
 type Mode = "unavailable" | "auto" | "off" | "max" | "custom";
 
@@ -53,7 +54,10 @@ export class FanSectionComponent implements OnInit, OnDestroy {
       const boot = await invoke<string>("local_storage", {
         function: "get", option: "fan_boot", value: "",
       });
-      await this.fanService.ready;
+      await this.fanService.ready.catch(async (error) => {
+        if (!this.destroyed && this.revision === bootRevision) await this.fan_auto();
+        throw error;
+      });
       if (!this.destroyed && this.revision === bootRevision) {
         const profiles = this.fanService.getProfiles();
         const selected = profiles.find((item) => item.selected) ?? profiles[0];
@@ -168,10 +172,13 @@ export class FanSectionComponent implements OnInit, OnDestroy {
     finally { if (!this.destroyed) this.schedulePoll(); }
   }
 
-  open_fan_custom_window() {
-    void invoke("open_window", {
-      name: "Custom_Fans", width: 980, height: 540, zoom: this.zoom,
-    }).catch((error) => this.report(error));
+  async open_fan_custom_window() {
+    try {
+      const value = await invoke<string>("local_storage", { function: "get", option: "zoom", value: "" });
+      if (!this.destroyed) await invoke("open_window", {
+        name: "Custom_Fans", width: 980, height: 540, zoom: zoomScale(value),
+      });
+    } catch (error) { this.report(error); }
   }
 
   ngOnDestroy() {
