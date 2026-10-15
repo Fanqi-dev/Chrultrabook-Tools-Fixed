@@ -34,6 +34,7 @@
     @if (error) {
       <div role="alert" class="text-danger">{{ error }}</div>
     }
+    @if (!loading && selectedIndex >= 0) {
     <canvas
       class="bg-dark p-2 rounded-3"
       baseChart
@@ -41,5 +42,6 @@
       [options]="lineChartOptions"
       [type]="'line'"
     ></canvas>
+    }
   </div>
 </div>

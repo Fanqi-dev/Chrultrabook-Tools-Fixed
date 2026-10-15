@@ -11,6 +11,8 @@ The dropdown and chart now use a single `selectedIndex`. Loading waits for
 `FanService.ready`, opens the applied profile (or the first if none is applied),
 and changes only when the select value changes, including keyboard selection.
 Chart data is copied into a draft. Save preserves the applied selection;
+The canvas is hidden until loading completes and curve animation is disabled,
+so opening the editor never briefly displays or morphs from a default curve.
 Save and Apply persists the draft and selection in one IPC request before
 notifying the main window. Duplicate saves are ignored while one is pending.
 The profile list and main-window boot path also await profile loading.

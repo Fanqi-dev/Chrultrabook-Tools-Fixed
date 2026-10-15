@@ -45,6 +45,7 @@ describe("Custom fan curve selection regression", () => {
   it("waits for profiles and opens the applied curve even when it is not first", async () => {
     expect(selector().disabled).toBeTrue();
     expect(fixture.componentInstance.selectedIndex).toBe(-1);
+    expect(fixture.nativeElement.querySelector("canvas")).toBeNull();
     await finishLoading();
     expect(selector().selectedIndex).toBe(1);
     expect(fixture.componentInstance.lineChartData.datasets[0].data).toEqual([40, 55, 70]);

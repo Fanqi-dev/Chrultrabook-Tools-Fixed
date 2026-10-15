@@ -132,6 +132,7 @@ export class FanCurvesComponent implements OnInit, OnDestroy {
   };
 
   public lineChartOptions: ChartConfiguration["options"] = {
+    animation: false,
     responsive: true,
     maintainAspectRatio: false,
     scales: {
