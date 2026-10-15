@@ -61,6 +61,15 @@ pub fn execute_relay(
     arguments: Vec<String>,
     reply: bool,
 ) -> String {
+    execute_relay_checked(handle, wanted_program, arguments, reply).unwrap_or_else(|e| e)
+}
+
+pub fn execute_relay_checked(
+    handle: tauri::AppHandle,
+    wanted_program: &str,
+    arguments: Vec<String>,
+    reply: bool,
+) -> Result<String, String> {
     let program = match wanted_program {
         "ectool" => ECTOOL,
         "cbmem" => CBMEM,
@@ -71,5 +80,5 @@ pub fn execute_relay(
     let output =
         tauri::async_runtime::block_on(async { execute(&handle, program, arguments, reply).await });
 
-    output.unwrap_or_else(|e| e)
+    output
 }

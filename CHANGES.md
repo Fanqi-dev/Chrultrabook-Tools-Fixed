@@ -1,5 +1,28 @@
 # Fan-control fix pack (B1–B6)
 
+## 2026-10-15: Software Auto and confirmed Custom Apply
+
+Direct hardware isolation confirmed that EC `autofanctrl` stops both fans at
+48°C on this machine. At the user's request, Auto now runs a software curve
+with a 40% minimum duty, rising to 100% at 55°C. Off remains the explicit
+zero-duty mode; Custom retains the user's saved curve.
+
+The main window now derives its label and highlighted button from one signal
+state. Bootstrap button toggling and direct DOM writes were removed. Fan writes
+are serialized, superseded requests are discarded, and only main controls fans.
+Late startup reads and resume callbacks cannot replace a newer chosen mode.
+Polling and listeners are cleaned up when the component is destroyed.
+
+Custom Apply uses structured data (including names with spaces), waits for main
+to finish the hardware write, and receives a matching confirmation. EC command
+failures reject the request instead of reporting success. Invalid temperature
+uses full fan duty and reports the failed Apply.
+
+Browser regression coverage includes the real editor/service/main event path,
+Auto→Apply→Auto repetition, asynchronous startup and mode-switch races, and
+failed writes. Hardware and installed-binary checks are recorded separately in
+the local handoff document.
+
 ## 2026-10-15: Custom editor selection repair
 
 The editor previously forced the first profile into the chart after 600 ms,

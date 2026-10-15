@@ -7,6 +7,7 @@ describe("Custom fan curve selection regression", () => {
   let loaded: () => void;
   let profiles: any[];
   let saveCurve: jasmine.Spy;
+  let applyCurve: jasmine.Spy;
   let ipc: jasmine.Spy;
   let previousIpc: unknown;
 
@@ -20,10 +21,11 @@ describe("Custom fan curve selection regression", () => {
     ];
     const ready = new Promise<void>((resolve) => { loaded = resolve; });
     saveCurve = jasmine.createSpy("saveCurve").and.resolveTo();
+    applyCurve = jasmine.createSpy("applyCurve").and.resolveTo();
     await TestBed.configureTestingModule({
       imports: [FanCurvesComponent],
       providers: [{ provide: FanService, useValue: {
-        ready, getProfiles: () => profiles, saveCurve,
+        ready, getProfiles: () => profiles, saveCurve, applyCurve,
       } }],
     }).compileComponents();
     fixture = TestBed.createComponent(FanCurvesComponent);
@@ -98,6 +100,7 @@ describe("Custom fan curve selection regression", () => {
     expect(fixture.componentInstance.saving).toBeFalse();
     expect(fixture.componentInstance.selectedIndex).toBe(1);
     expect(ipc).not.toHaveBeenCalled();
+    expect(applyCurve).not.toHaveBeenCalled();
   });
 
   it("applies only after persistence completes and ignores repeated save clicks", async () => {
@@ -113,9 +116,7 @@ describe("Custom fan curve selection regression", () => {
     expect(selector().disabled).toBeTrue();
     persisted();
     await pending;
-    expect(ipc).toHaveBeenCalledOnceWith("transfer_fan_curves", {
-      curves: "Cooling [40,55,70]",
-    }, undefined);
+    expect(applyCurve).toHaveBeenCalledOnceWith("Cooling", [40, 55, 70]);
     expect(fixture.componentInstance.saving).toBeFalse();
   });
 

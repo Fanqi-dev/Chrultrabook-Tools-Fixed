@@ -313,24 +313,55 @@ async fn get_rgb_json() -> String {
 }
 
 #[tauri::command]
-fn set_custom_fan(handle: tauri::AppHandle, temp: u16, array: Vec<u8>) {
-    // B3: ignore unset/zero temps so startup never writes fanduty 0.
-    if temp == 0 {
-        return;
+fn set_fan_duty(handle: tauri::AppHandle, window: tauri::Window, duty: u8) -> Result<(), String> {
+    if window.label() != "main" || duty > 100 {
+        return Err("Invalid fan duty request".into());
     }
-    let fan_speed = custom_fan::calculate_fan_percentage(temp, array).to_string();
-    execute::execute_relay(
+    execute::execute_relay_checked(
         handle,
         "ectool",
-        helper::to_vec_string(vec!["fanduty", &fan_speed]),
-        false,
-    );
+        vec!["fanduty".into(), duty.to_string()],
+        true,
+    ).map(|_| ())
 }
 
 #[tauri::command]
-fn transfer_fan_curves(app: AppHandle, curves: String) {
+fn set_custom_fan(handle: tauri::AppHandle, window: tauri::Window, temp: u16, array: Vec<u8>) -> Result<(), String> {
+    if temp == 0 || array.len() < 12 || array.iter().any(|value| *value > 100) {
+        return Err("Invalid fan curve or temperature".into());
+    }
+    set_fan_duty(handle, window, custom_fan::calculate_fan_percentage(temp, array))
+}
+
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct FanCurveRequest {
+    request_id: String,
+    name: String,
+    array: Vec<u8>,
+}
+
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct FanCurveResult {
+    request_id: String,
+    applied: bool,
+}
+
+#[tauri::command]
+fn transfer_fan_curves(app: AppHandle, curves: FanCurveRequest) -> Result<(), String> {
+    if curves.name.trim().is_empty() || curves.array.len() < 12 || curves.array.iter().any(|value| *value > 100) {
+        return Err("Invalid fan curve".into());
+    }
     app.emit_to(EventTarget::webview_window("main"), "fan_curve", &curves)
-        .expect("failure to transmit data");
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+fn fan_curve_feedback(app: AppHandle, window: tauri::Window, result: FanCurveResult) -> Result<(), String> {
+    if window.label() != "main" { return Err("Only main can confirm fan control".into()); }
+    app.emit_to(EventTarget::webview_window("Custom_Fans"), "fan_curve_applied", &result)
+        .map_err(|error| error.to_string())
 }
 
 #[tauri::command]
@@ -560,7 +591,9 @@ fn main() {
             get_fan_json,
             get_rgb_json,
             set_custom_fan,
+            set_fan_duty,
             transfer_fan_curves,
+            fan_curve_feedback,
             transfer_rgb,
             setzoom,
             reset,

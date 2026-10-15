@@ -116,6 +116,8 @@
         },
         "test": {
           "options": {
+            "assets": ["src/assets"],
+            "scripts": ["node_modules/bootstrap/dist/js/bootstrap.bundle.min.js"],
             "watch": false,
             "tsConfig": "tsconfig.spec.json",
             "polyfills": [

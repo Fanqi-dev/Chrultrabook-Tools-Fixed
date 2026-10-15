@@ -1,7 +1,11 @@
-import { ChangeDetectorRef, Component, inject, OnInit } from "@angular/core";
+import { Component, computed, inject, OnDestroy, OnInit, signal } from "@angular/core";
 import { FanService } from "../../services/fan.service";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { invoke } from "@tauri-apps/api/core";
+import { UnlistenFn } from "@tauri-apps/api/event";
+import { AUTO_FAN_CURVE, FanCurveRequest, validCurve } from "../../services/fan-control";
+
+type Mode = "unavailable" | "auto" | "off" | "max" | "custom";
 
 @Component({
   selector: "app-fan-section",
@@ -10,286 +14,170 @@ import { invoke } from "@tauri-apps/api/core";
   styleUrl: "./fan-section.component.scss",
   providers: [FanService],
 })
-export class FanSectionComponent implements OnInit {
-  selected_mode: string = "N/A";
-  temp: number = 0;
-  fan_exists: boolean = true;
-  disabled_class: string = "disable";
-  button: string = "btn-outline-secondary";
+export class FanSectionComponent implements OnInit, OnDestroy {
+  readonly state = signal<{ mode: Mode; name: string; curve: number[] }>({
+    mode: "unavailable", name: "N/A", curve: [],
+  });
+  readonly selectedMode = computed(() => this.state().name);
+  readonly temperature = signal<number | null>(null);
+  readonly rpm = signal<number | null>(null);
+  readonly fanAvailable = signal(false);
+  readonly error = signal("");
+  readonly fanService = inject(FanService);
+  zoom = 1;
+  private revision = 0;
+  private destroyed = false;
+  private timer?: ReturnType<typeof setTimeout>;
+  private unlisten: UnlistenFn[] = [];
+  private writes: Promise<unknown> = Promise.resolve();
 
-  fan_auto_class: string = "";
-  fan_off_class: string = "";
-  fan_max_class: string = "";
-  fan_custom_class: string = "";
-
-  auto_active: string = "";
-  off_active: string = "";
-  max_active: string = "";
-  custom_active: string = "";
-
-  active_class: string = "";
-  extension: string = "N/A";
-  interval: any;
-  fan_array: any;
-
-  zoom: number = 1;
-
-  fanService: FanService = inject(FanService);
-  constructor(private cdr: ChangeDetectorRef) {}
-
-  ngOnInit() {
-    invoke("execute", {
-      program: "ectool",
-      arguments: ["pwmgetfanrpm", "all"],
-      reply: true,
-    }).then((event) => {
-      let output: any = event;
-      let split = output.split(" ");
-      console.log(split[0]);
-      if (split[0] == "Fan") {
-        //fans are auto disabled, this reverses the disabling
-        this.fan_auto_class = "btn-outline-success";
-        this.fan_off_class = "btn-outline-warning ";
-        this.fan_max_class = "btn-outline-danger";
-        this.fan_custom_class = "btn-outline-info btn-outline-info-custom";
-        this.extension = "RPM";
-        this.disabled_class = "";
-        this.fan_exists = false;
-        this.cdr.detectChanges();
-
-        //checks if user wants fan curves on boot and applies the respective classes
-        invoke("local_storage", {
-          function: "get",
-          option: "fan_boot",
-          value: "",
-        }).then(async (event) => {
-          if (typeof event === "string") {
-            if (event == "") {
-              this.auto_active = "active";
-              this.selected_mode = "Auto";
-              this.fan_auto();
-            } else {
-              let output = JSON.parse(event);
-              if (output) {
-                await this.fanService.ready;
-                const selected_data = this.fanService.getSelected();
-                this.selected_mode = selected_data[0];
-                this.fan_array = selected_data[1];
-                this.custom_active = "active";
-                this.apply_interval();
-              } else {
-                this.auto_active = "active";
-                this.selected_mode = "Auto";
-                this.fan_auto();
-              }
-            }
-            this.cdr.detectChanges();
-          }
-        }).catch((error) => {
-          console.error("fan-section: failed to read fan_boot:", error);
-        });
-
-        setInterval(this.get_fan_rpm, 1000);
-        this.button = "border-0";
-      }
-      invoke("local_storage", {
-        function: "get",
-        option: "zoom",
-        value: "",
-      }).then((percentage) => {
-        if (typeof percentage === "string") {
-          const number = Number(percentage) / 100;
-          this.zoom = number;
-        }
-      }).catch((error) => {
-        console.error("fan-section: failed to read zoom setting:", error);
-      });
-    }).catch((error) => {
-      // ectool missing/failed (no CROS-EC driver, no permission, no fan):
-      // keep the fan controls disabled but surface the reason instead of
-      // dying with a silent unhandled rejection
-      console.error(
-        "fan-section: fan detection failed, fan controls stay disabled:",
-        error
-      );
-      this.cdr.detectChanges();
-    });
-
-    //starts the interval of reading the cpu temps
-    setInterval(() => {
-      this.get_cpu_temp();
-    }, 1000);
-
-    //listens to the data outputted by rust
-    const appWebview = getCurrentWebviewWindow();
-    appWebview.listen<string>("fan_curve", (event) => {
-      let payload = event.payload;
-      let payload_split = payload.split(" ");
-      let profile = payload_split[0];
-      (document.getElementById("selected_mode") as HTMLInputElement).innerText =
-        profile;
-      this.fan_array = JSON.parse(payload_split[1]);
-      console.log(this.fan_array);
-      this.fan_custom();
-    });
-
-    // B6: Rust emits system_resume after detecting sleep→wake (wall-clock jump).
-    appWebview.listen("system_resume", () => {
-      console.log("fan-section: system_resume — re-applying fan curve");
-      this.reapply_curve_once();
-    });
-  }
-
-  async get_cpu_temp() {
+  async ngOnInit() {
+    const webview = getCurrentWebviewWindow();
+    // Only main owns control, even if a secondary window renders a startup route.
+    if (webview.label !== "main") return;
+    const bootRevision = this.revision;
     try {
-      const output: number = await invoke("get_temps");
-      const convertedOutput = output.toString().trim();
-      const el = document.getElementById("temp") as HTMLInputElement | null;
-      if (el) {
-        el.innerText = convertedOutput;
-      }
-      this.temp = Number(convertedOutput);
-    } catch (error) {
-      console.error("fan-section: get_temps failed:", error);
-    }
-  }
-
-  async get_fan_rpm() {
-    try {
-      const output: string = await invoke("execute", {
-        program: "ectool",
-        arguments: ["pwmgetfanrpm", "all"],
-        reply: true,
+      this.keepListener(await webview.listen<FanCurveRequest>("fan_curve", (event) => {
+        void this.receiveCurve(event.payload);
+      }));
+      this.keepListener(await webview.listen("system_resume", () => {
+        if (this.isCurveMode()) void this.writeMode(this.revision).catch(() => {});
+      }));
+      if (this.destroyed) return;
+      const output = await invoke<string>("execute", {
+        program: "ectool", arguments: ["pwmgetfanrpm", "all"], reply: true,
       });
-      const split = output.split(" ");
-      const el = document.getElementById("fanRPM") as HTMLInputElement | null;
-      if (el && split[3]) {
-        el.innerText = split[3].trim();
-      }
-    } catch (error) {
-      console.error("fan-section: get_fan_rpm failed:", error);
-    }
-  }
-
-  switchSelected() {
-    this.auto_active = "";
-    this.off_active = "";
-    this.max_active = "";
-    this.custom_active = "";
-  }
-
-  fan_auto() {
-    invoke("execute", {
-      program: "ectool",
-      arguments: ["autofanctrl"],
-      reply: false,
-    }).catch((error) => {
-      console.error("fan-section: fan_auto failed:", error);
-    });
-    clearInterval(this.interval);
-    this.selected_mode = "Auto";
-    this.switchSelected();
-    this.auto_active = "active";
-  }
-  fan_off() {
-    invoke("execute", {
-      program: "ectool",
-      arguments: ["fanduty", "0"],
-      reply: false,
-    }).catch((error) => {
-      console.error("fan-section: fan_off failed:", error);
-    });
-    clearInterval(this.interval);
-    this.selected_mode = "Off";
-    this.switchSelected();
-    this.off_active = "active";
-  }
-  fan_max() {
-    invoke("execute", {
-      program: "ectool",
-      arguments: ["fanduty", "100"],
-      reply: false,
-    }).catch((error) => {
-      console.error("fan-section: fan_max failed:", error);
-    });
-    clearInterval(this.interval);
-    this.selected_mode = "Max";
-    this.switchSelected();
-    this.max_active = "active";
-  }
-
-  fan_custom() {
-    this.switchSelected();
-    this.custom_active = "active";
-    this.apply_interval();
-  }
-  apply_interval() {
-    clearInterval(this.interval);
-    // B3: never write fanduty while temp is still the unset default (0).
-    // Seed a real reading first, then tick every second.
-    this.get_cpu_temp()
-      .then(() => {
-        if (this.temp > 0 && this.fan_array) {
-          invoke("set_custom_fan", {
-            temp: this.temp,
-            array: this.fan_array,
-          }).catch((error) => {
-            console.error("fan-section: set_custom_fan failed:", error);
-          });
+      if (!/Fan\s+\d+\s+RPM:/i.test(output)) throw new Error(output);
+      this.fanAvailable.set(true);
+      this.updateRPM(output);
+      const boot = await invoke<string>("local_storage", {
+        function: "get", option: "fan_boot", value: "",
+      });
+      await this.fanService.ready;
+      if (!this.destroyed && this.revision === bootRevision) {
+        const profiles = this.fanService.getProfiles();
+        const selected = profiles.find((item) => item.selected) ?? profiles[0];
+        if (boot === "true" && selected && validCurve(selected.array)) {
+          await this.changeMode("custom", selected.name, selected.array);
+        } else {
+          await this.fan_auto();
         }
-      })
-      .catch((error) => {
-        console.error("fan-section: initial get_temps failed:", error);
-      });
-    this.interval = setInterval(() => {
-      if (this.temp > 0 && this.fan_array) {
-        invoke("set_custom_fan", {
-          temp: this.temp,
-          array: this.fan_array,
-        }).catch((error) => {
-          console.error("fan-section: set_custom_fan failed:", error);
-        });
       }
-    }, 1000);
+      const percentage = Number(await invoke<string>("local_storage", {
+        function: "get", option: "zoom", value: "",
+      }));
+      if (Number.isFinite(percentage) && percentage > 0) this.zoom = percentage / 100;
+    } catch (error) {
+      this.report(error);
+    } finally {
+      if (!this.destroyed && this.fanAvailable()) this.schedulePoll();
+    }
   }
 
-  /** Re-assert the active custom curve once (used after sleep/resume). */
-  reapply_curve_once() {
-    if (this.custom_active !== "active" || !this.fan_array) {
-      return;
-    }
-    const run = () => {
-      if (this.temp > 0) {
-        invoke("set_custom_fan", {
-          temp: this.temp,
-          array: this.fan_array,
-        }).catch((error) => {
-          console.error("fan-section: resume set_custom_fan failed:", error);
-        });
+  private keepListener(unlisten: UnlistenFn) {
+    if (this.destroyed) unlisten();
+    else this.unlisten.push(unlisten);
+  }
+
+  private isCurveMode() {
+    return this.state().mode === "auto" || this.state().mode === "custom";
+  }
+
+  private report(error: unknown) {
+    console.error("fan control:", error);
+    if (!this.destroyed) this.error.set("Unable to apply fan control. Please retry.");
+  }
+
+  async fan_auto() { return this.changeMode("auto", "Auto", AUTO_FAN_CURVE).catch(() => false); }
+  async fan_off() { return this.changeMode("off", "Off", []).catch(() => false); }
+  async fan_max() { return this.changeMode("max", "Max", []).catch(() => false); }
+
+  private async changeMode(mode: Mode, name: string, curve: readonly number[]) {
+    if (this.destroyed) return false;
+    const revision = ++this.revision;
+    this.error.set("");
+    // Name, highlight and curve always change as one state value.
+    this.state.set({ mode, name, curve: [...curve] });
+    return this.writeMode(revision);
+  }
+
+  private writeMode(revision: number, sampledTemp?: number): Promise<boolean> {
+    const write = this.writes.catch(() => {}).then(async () => {
+      if (this.destroyed || revision !== this.revision) return false;
+      const state = this.state();
+      if (state.mode === "off" || state.mode === "max") {
+        await invoke("set_fan_duty", { duty: state.mode === "off" ? 0 : 100 });
+      } else if (state.mode === "auto" || state.mode === "custom") {
+        const temp = sampledTemp ?? await invoke<number>("get_temps");
+        if (this.destroyed || revision !== this.revision) return false;
+        if (!Number.isFinite(temp) || temp <= 0) {
+          this.temperature.set(null);
+          await invoke("set_fan_duty", { duty: 100 });
+          throw new Error("No valid temperature; using full speed");
+        }
+        this.temperature.set(temp);
+        await invoke("set_custom_fan", { temp, array: [...state.curve] });
       }
-    };
-    // Refresh temp then write; also schedule a follow-up within ~5s.
-    this.get_cpu_temp()
-      .then(run)
-      .catch((error) => {
-        console.error("fan-section: resume get_temps failed:", error);
-        run();
+      if (!this.destroyed && revision === this.revision) this.error.set("");
+      return !this.destroyed && revision === this.revision;
+    }).catch((error) => {
+      if (revision === this.revision) this.report(error);
+      throw error;
+    });
+    this.writes = write;
+    return write;
+  }
+
+  private async receiveCurve(request: FanCurveRequest) {
+    if (this.destroyed) return;
+    let applied = false;
+    try {
+      if (!request || !request.name?.trim() || !validCurve(request.array)) {
+        throw new Error("Invalid fan curve request");
+      }
+      applied = await this.changeMode("custom", request.name, request.array);
+    } catch (error) { this.report(error); }
+    if (request?.requestId && !this.destroyed) {
+      await invoke("fan_curve_feedback", {
+        result: { requestId: request.requestId, applied },
+      }).catch((error) => this.report(error));
+    }
+  }
+
+  private updateRPM(output: string) {
+    const matches = [...output.matchAll(/Fan\s+\d+\s+RPM:\s*(\d+)/gi)];
+    this.rpm.set(matches.length ? Math.max(...matches.map((m) => Number(m[1]))) : null);
+  }
+
+  private schedulePoll() {
+    this.timer = setTimeout(() => { void this.poll(); }, 1000);
+  }
+
+  private async poll() {
+    try {
+      const temp = await invoke<number>("get_temps");
+      if (this.destroyed) return;
+      this.temperature.set(Number.isFinite(temp) && temp > 0 ? temp : null);
+      const output = await invoke<string>("execute", {
+        program: "ectool", arguments: ["pwmgetfanrpm", "all"], reply: true,
       });
-    setTimeout(run, 2000);
+      if (this.destroyed) return;
+      this.updateRPM(output);
+      if (this.isCurveMode()) await this.writeMode(this.revision, temp);
+    } catch (error) { this.report(error); }
+    finally { if (!this.destroyed) this.schedulePoll(); }
   }
 
   open_fan_custom_window() {
-    invoke("open_window", {
-      name: "Custom_Fans",
-      width: 980.0,
-      height: 540.0,
-      zoom: this.zoom,
-    }).catch((error) => {
-      console.error("fan-section: failed to open custom fan window:", error);
-    });
+    void invoke("open_window", {
+      name: "Custom_Fans", width: 980, height: 540, zoom: this.zoom,
+    }).catch((error) => this.report(error));
   }
 
   ngOnDestroy() {
-    clearInterval(this.interval);
+    this.destroyed = true;
+    ++this.revision;
+    clearTimeout(this.timer);
+    this.unlisten.forEach((unlisten) => unlisten());
   }
 }

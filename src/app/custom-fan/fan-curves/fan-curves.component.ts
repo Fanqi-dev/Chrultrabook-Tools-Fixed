@@ -14,7 +14,6 @@ import { profile } from "../../services/profiles";
 import { BaseChartDirective } from "ng2-charts";
 import { ChartConfiguration, Chart } from "chart.js/auto";
 import DragData from "chartjs-plugin-dragdata";
-import { invoke } from "@tauri-apps/api/core";
 
 @Component({
   selector: "app-fan-curves",
@@ -81,9 +80,7 @@ export class FanCurvesComponent implements OnInit, OnDestroy {
     try {
       await this.fan_service.saveCurve(index, curve, apply);
       if (apply) {
-        await invoke("transfer_fan_curves", {
-          curves: name + " " + JSON.stringify(curve),
-        });
+        await this.fan_service.applyCurve(name, curve);
       }
     } catch (error) {
       console.error("fan-curves: save/apply failed:", error);

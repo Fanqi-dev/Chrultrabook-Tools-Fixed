@@ -1,6 +1,8 @@
 import { Injectable } from "@angular/core";
 import { profile } from "./profiles";
 import { invoke } from "@tauri-apps/api/core";
+import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
+import { FanCurveResult } from "./fan-control";
 
 @Injectable({
   providedIn: "root",
@@ -108,6 +110,25 @@ export class FanService {
       value: JSON.stringify(profiles),
     });
     profiles.forEach((item, i) => Object.assign(this.profiles_list[i], item));
+  }
+
+  async applyCurve(name: string, array: number[]): Promise<void> {
+    const requestId = crypto.randomUUID();
+    let resolveResult!: (result: FanCurveResult) => void;
+    const result = new Promise<FanCurveResult>((resolve) => { resolveResult = resolve; });
+    const unlisten = await getCurrentWebviewWindow().listen<FanCurveResult>(
+      "fan_curve_applied", (event) => {
+        if (event.payload.requestId === requestId) resolveResult(event.payload);
+      },
+    );
+    const timeout = setTimeout(() => resolveResult({ requestId, applied: false }), 8000);
+    try {
+      await invoke("transfer_fan_curves", { curves: { requestId, name, array: [...array] } });
+      if (!(await result).applied) throw new Error("Main window did not apply the fan curve");
+    } finally {
+      clearTimeout(timeout);
+      unlisten();
+    }
   }
 
   deleteProfile(i: number) {
