@@ -117,6 +117,7 @@
         "test": {
           "options": {
             "assets": ["src/assets"],
+            "styles": ["node_modules/bootstrap/dist/css/bootstrap.min.css"],
             "scripts": ["node_modules/bootstrap/dist/js/bootstrap.bundle.min.js"],
             "watch": false,
             "tsConfig": "tsconfig.spec.json",

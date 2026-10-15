@@ -1,5 +1,16 @@
 # Fan-control fix pack (B1–B6)
 
+## 2026-10-15: Custom window resize feedback loop
+
+The Custom page reloaded itself on every native resize, then measured content
+whose height included a full viewport plus the header and padding. Its startup
+setSize enlarged the window again, triggering another reload. This repeatedly
+recreated the curve editor as well as continuously increasing window dimensions.
+
+Removed reload-on-resize and content-driven native resizing. The header and
+navigation now share a bounded viewport with a flexible chart region. Resizing
+keeps the current editor instance and draft; tabs derive selection from routing.
+
 ## 2026-10-15: Software Auto and confirmed Custom Apply
 
 Direct hardware isolation confirmed that EC `autofanctrl` stops both fans at

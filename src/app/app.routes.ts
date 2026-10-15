@@ -22,7 +22,8 @@ export const routes: Routes = [
     children: [
       {
         path: "",
-        component: FanCurvesComponent,
+        redirectTo: "fan_curves",
+        pathMatch: "full",
       },
       {
         path: "fan_curves",
