@@ -1,0 +1,18 @@
+name: verify-curve
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Compile standalone fan curve tests
+        run: rustc --test src-tauri/src/custom_fan.rs -o fan-curve-tests.exe
+      - name: Run all seven fan curve tests
+        run: ./fan-curve-tests.exe

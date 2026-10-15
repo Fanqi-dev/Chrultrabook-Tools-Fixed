@@ -35,7 +35,10 @@ jobs:
         run: npm run tauri build
 
       - name: Curve-math unit tests (B4 gate)
-        run: cargo test calculate_fan_percentage
+        run: |
+          rustc --test src/custom_fan.rs -o fan-curve-tests.exe
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          ./fan-curve-tests.exe
         working-directory: src-tauri
 
       - name: Upload raw exe
