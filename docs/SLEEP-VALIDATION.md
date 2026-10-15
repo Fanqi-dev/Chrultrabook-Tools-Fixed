@@ -1,6 +1,6 @@
-# Windows sleep / fan handoff: 3.1.9 candidate
+# Windows sleep / fan handoff: 3.1.9
 
-Status: Windows CI passed; manual device acceptance pending. The published stable release remains 3.1.8.
+Status: Windows CI passed. The user reported all requested manual checks passing on one Windows Chromebook and authorized formal replacement on 2026-10-15. The installed 3.1.9 executable matches the tested candidate's SHA-256 below.
 
 ## Behavior
 
@@ -14,9 +14,9 @@ Status: Windows CI passed; manual device acceptance pending. The published stabl
 - 64 browser regressions passed locally and in Windows CI, including paused polling, Custom mode retention, Auto/Max/Off restoration, pending pre-sleep temperature rejection, startup screen-off, and startup notification/query ordering.
 - All 28 native Rust tests passed in Windows CI. The five power-state tests cover S0 display transitions, background wakes, ordinary suspend/resume, notification ordering, and duplicate events, alongside the existing curve, sensor, brightness and settings tests.
 - Windows MSVC release compilation, exe upload, and MSI/NSIS packaging passed in [build 38745855588](https://github.com/Fanqi-dev/Chrultrabook-Tools-Fixed/actions/runs/38745855588), source commit `8e73fd2a7d6d58707509c834b701ef45f7274f88`.
-- Final device acceptance remains required before publishing 3.1.9 as stable.
+- The user reported Auto/Custom lid-close, sleep/wake, mode/curve restoration, and post-wake brightness checks passing. Local trace inspection observed two successful firmware handoffs and fresh curve writes after waking. It does not establish long-duration standby power efficiency, all-device compatibility or installer behavior. Raw device logs and user settings are not published.
 
-Candidate executable SHA-256: `0c341aa9b394ce2e1db2e1cab10430ef0105e45b4491f31b08faec3e2bf59bbe`.
+Tested and installed executable SHA-256: `0c341aa9b394ce2e1db2e1cab10430ef0105e45b4491f31b08faec3e2bf59bbe`. Subsequent release commits change documentation only.
 
 ## Manual acceptance (user operated)
 

@@ -1,6 +1,6 @@
 # Changelog
 
-## 3.1.9 — candidate, pending device acceptance
+## 3.1.9 — 2026-10-15
 
 - Return fan control to the EC firmware when the Windows session display turns off or the system suspends. This includes S0 Modern Standby, which cannot rely on ordinary S3 suspend events alone.
 - Block queued manual fan writes during the handoff and pause temperature/RPM polling while inactive.
@@ -10,7 +10,7 @@
 
 The handoff uses `ectool autofanctrl`; the firmware decides whether cooling is still needed. This does not change the Windows lid action or force the fan to zero. Turning the screen off while Windows remains awake also temporarily uses firmware fan control.
 
-Validation: 64 browser regressions and 28 native Rust tests passed in Windows CI; Windows MSVC compilation and MSI/NSIS packaging passed in [build 38745855588](https://github.com/Fanqi-dev/Chrultrabook-Tools-Fixed/actions/runs/38745855588). Manual lid/sleep/wake acceptance is still pending. Version 3.1.8 remains the published stable release until those checks pass. See [SLEEP-VALIDATION](docs/SLEEP-VALIDATION.md) for the exact candidate source and executable digest.
+Validation: 64 browser regressions and 28 native Rust tests passed in Windows CI; Windows MSVC compilation and MSI/NSIS packaging passed in [build 38745855588](https://github.com/Fanqi-dev/Chrultrabook-Tools-Fixed/actions/runs/38745855588). The user reported successful manual Auto/Custom lid-close, sleep/wake, mode restoration and post-wake brightness checks on one Windows Chromebook, and authorized replacement. The installed executable matches the tested candidate digest. Installers were built but their installation flows were not separately exercised. See [SLEEP-VALIDATION](docs/SLEEP-VALIDATION.md) for the exact binary source and verification scope; subsequent release commits update documentation only.
 
 ## 3.1.8 — 2026-10-15
 
