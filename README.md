@@ -1,178 +1,83 @@
-# Chrultrabook Tools
+# Chrultrabook Tools Fixed
 
-<img src="https://img.shields.io/github/downloads/Death7654/Chrultrabook-Controller/total" alt="shields">&nbsp;&nbsp;
-<img src="https://img.shields.io/github/forks/Death7654/Chrultrabook-Controller?style=social" alt="shields">&nbsp;&nbsp;
-<img src="https://img.shields.io/github/stars/Death7654/Chrultrabook-Controller?style=social" alt="shields">
+**让风扇曲线、键盘背光和窗口行为更稳定的 Windows 修复版。**
 
----
+[![Release](https://img.shields.io/github/v/release/Fanqi-dev/Chrultrabook-Tools-Fixed)](https://github.com/Fanqi-dev/Chrultrabook-Tools-Fixed/releases/latest)
+[![Windows build](https://github.com/Fanqi-dev/Chrultrabook-Tools-Fixed/actions/workflows/build-windows.yml/badge.svg)](https://github.com/Fanqi-dev/Chrultrabook-Tools-Fixed/actions/workflows/build-windows.yml)
+[![License: GPL-3.0](https://img.shields.io/badge/License-GPL--3.0-blue.svg)](LICENSE)
 
-## Your Chrultrabook, Your Way
+[下载 Windows 版](https://github.com/Fanqi-dev/Chrultrabook-Tools-Fixed/releases/latest) · [更新记录](CHANGELOG.md) · [问题反馈](https://github.com/Fanqi-dev/Chrultrabook-Tools-Fixed/issues) · [原项目](https://github.com/death7654/Chrultrabook-Tools)
 
-<img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/7b4f3899-e3e8-45b4-ab0d-bc23b0cdf82b" />
+本项目由 [Chrultrabook Tools](https://github.com/death7654/Chrultrabook-Tools) 的源码派生，由 **Fanqi-dev** 维护修复。重点解决 Custom 曲线选择冲突、Apply 后主页模式回退、二级窗口不断放大，以及键盘背光调节后变灰的问题。
 
----
+软件继续使用 `Chrultrabook Tools` 的应用标识和配置路径，便于已有用户升级。原作者为 **Robinson Arysseril / death7654**；本项目保留上游署名与 GPL-3.0 许可证。完整上游介绍见 [UPSTREAM-README](docs/UPSTREAM-README.md)。
 
-## Features
+> **English:** A community-maintained Windows stability edition of Chrultrabook Tools. It fixes Custom fan-curve selection and Apply synchronization, resize/reload loops, keyboard-backlight state handling, and hardware-control error reporting. This is an independent maintenance repository, not an official upstream release.
 
-- CPU Temperature Monitoring
-- CPU Temperature Graph
-- Keyboard Remap (Windows)
-- RGB Keyboard Controls
-- Fan Speed Monitoring
-- Custom Fan Curves
-- Custom Fan Profiles
-- Fan Speed Graph
-- Start Application in System Tray
-- Start Application on System Boot
-- Start Custom Fan Profiles on System Boot
-- Start Custom RGB Profile on System Boot
-- Create Custom RGB Profiles
-- Change Keyboard Brightness
-- Change Activity Light Colors (on select Chromebooks)
-- System Diagnostics
+## 3.1.8 修复了什么
 
----
+| 原有现象 | 当前行为 |
+| --- | --- |
+| 下拉选项和图上的两条曲线来回跳 | 下拉与图表共用一个选择状态；编辑草稿与已保存曲线分开 |
+| Custom 点击 Apply 后主页回到 Auto | 主窗口完成硬件写入并确认后才报告应用成功；名称与按钮状态同步 |
+| Custom 页面持续变大 | 删除 resize → reload → setSize 循环，图表限制在窗口视口内 |
+| 背光调到 30% 后变灰 | 正确识别支持背光的 0% 状态；写入和读回在同一个原生事务中完成 |
+| 快速操作、保存失败后状态不一致 | 串行硬件操作，丢弃过期结果；失败时回退并允许重试 |
+| 设置保存或窗口关闭存在异常 | 完整文件写入、上一版备份、错误反馈和无递归关闭 |
 
-## Install Instructions
+另外修复了采样页面关闭后继续轮询、诊断报告乱序覆盖、电池命令参数、开机启动开关和键盘映射备份等问题。详细技术记录见 [STABILITY-REVIEW.md](STABILITY-REVIEW.md)。
 
-### Linux
+## 风扇模式
 
----
+- **Auto：** 本修复版采用软件自动曲线，最低 **40% 占空比**，在 **55°C** 达到 100%。这是本维护版的行为选择；占空比不等于 RPM，也不代表所有设备都有相同的最低实际转速。
+- **Off：** 显式设置 0% 占空比。
+- **Max：** 设置 100% 占空比。
+- **Custom：** 使用你保存的曲线；Apply 会等待主窗口确认。温度读数不可用时，软件尝试设置满速并报告错误。
 
-### Fedora and Derivatives
+软件 Auto 和 Custom 需要程序保持运行；关闭到托盘后仍会继续控制风扇。
 
-Add the Terra repository (if using Ultramarine Linux or Nobara, Terra is pre-installed).  
-Instructions can be found [here](https://github.com/terrapkg/packages/blob/frawhide/README.md)
+## 下载与使用
 
-Install Chrultrabook-Tools:
-```
-dnf install chrultrabook-tools
-```
-Reboot your chromebook
+1. 安装适用于设备的 [CoolStar Chrome EC 驱动](https://github.com/coolstar/driverinstallers/tree/master/crosec)，确保 `ectool` 可用。
+2. 到 [Releases](https://github.com/Fanqi-dev/Chrultrabook-Tools-Fixed/releases/latest) 下载 Windows x64 便携包，或选择 MSI / NSIS 安装器。
+3. 升级前退出旧程序；便携包解压后运行 `chrultrabook-tools.exe`。所需权限取决于 EC 驱动配置。
+4. 先检查温度和转速，再按需选择 Auto 或 Custom。使用 `SHA256SUMS.txt` 可核对下载文件。
 
----
+设置位于 `%APPDATA%\chrultrabook-tools\settings.json`。保存时会保留上一份完整配置为 `settings.json.bak`；已有可读取的旧配置会迁移。自己的曲线和设置建议另行备份。
 
-### Debian and Derivatives
+## 验证范围
 
-#### Add the Chrultrabook Repository
+- **58 项浏览器回归测试通过**：覆盖曲线选择、Apply 确认、窗口尺寸、亮度调节、失败回退和异步竞态。
+- **23 项 Rust 测试通过**：覆盖曲线插值、温度解析、配置写入和亮度响应解析。
+- Windows MSVC 云构建通过；一台 Windows Chromebook 上由用户手动复核了实际背光、Auto、Custom/Apply 和窗口关闭重开。
+- 实测使用便携 exe；安装器已完成云构建，未单独验证安装流程。
+- Linux / macOS 本次未做设备验收。测试设备不支持 RGB 键盘，RGB 硬件效果未验收；电池模式、键盘映射和重置未进行真实设备写入验收。
+- 原先“变灰”已确认与 0% 状态误判有关。早期偶发读回异常无法唯一归因；当前原生写入/读回事务已通过手动复核与日志比对。
 
-1. Download and save the repository signing key:
-```
-sudo wget https://chrultrabook.sakamoto.pl/repos/debian/chrultrabook-debian-pub.asc -O /etc/apt/trusted.gpg.d/chrultrabook-debian-archive-keyring.asc
-```
-2. Download the source file to sources.list.d:
-```
-sudo wget https://chrultrabook.sakamoto.pl/repos/debian/chrultrabook.sources -O /etc/apt/sources.list.d/chrultrabook.sources
-```
-3. Update package lists:
-```
-sudo apt-get update
-```
-#### Install ectool and cbmem
-```
-sudo apt-get install cbmem chromium-ectool
-```
-#### Install Chrultrabook-Tools
+## 从源码构建
 
-1. cd to the directory containing the .deb file  
-2. Run the following command with the correct version:
-```
-sudo apt install ./chrultrabook-tools_3.1.3_amd64.deb
-```
-Reboot your chromebook
+项目使用 Angular 22、Tauri 2 和 Rust。准备 [Tauri 系统依赖](https://v2.tauri.app/start/prerequisites/) 后：
 
----
-
-### Arch and Derivatives
-
-Install AUR dependencies (example uses [paru](https://github.com/Morganamilo/paru)):
-```
-paru -S chromium-ectool cbmem
-```
-Download the Arch package from the Releases page, then install:
-```
-pacman -U ~/Downloads/chrultrabook-tools-VERSION-pkg.tar.zst
-```
-Replace VERSION with the latest version and adjust the file path if needed.
-After install reboot your chromebook 
----
-
-
-### Build from Source
-1. Install tauri [prerequisites](https://v2.tauri.app/start/prerequisites/)
-2. Run the following commands
-```
-git clone https://github.com/death7654/Chrultrabook-Tools.git
-cd Chrultrabook-Tools
-npm install
+```sh
+git clone https://github.com/Fanqi-dev/Chrultrabook-Tools-Fixed.git
+cd Chrultrabook-Tools-Fixed
+npm ci
+npm run test:fan
+npm run build
 npm run tauri build
 ```
----
 
-## Windows
+Windows GitHub Actions 会先运行浏览器和 Rust 回归测试，再生成 exe 与安装器。本地不需要安装完整工具链即可从 Releases 获取构建好的版本。
 
-- Install Coolstar’s latest CROS-EC [driver](https://github.com/coolstar/driverinstallers/tree/master/crosec)
-- Download the MSI or EXE from the latest [release](https://github.com/death7654/Chrultrabook-Tools/releases)
-- Run the installer
-- Open the application
+## 反馈与贡献
 
----
+请在 [Issues](https://github.com/Fanqi-dev/Chrultrabook-Tools-Fixed/issues) 说明设备型号、Windows / EC 驱动版本、操作步骤、预期与实际结果。提交日志前检查其中是否包含不想公开的信息。
 
-## macOS
+面向原项目的修复会通过单独的上游 fork 和 Pull Request 提交，便于原作者按其项目策略评审。
 
-- Download the ectool [binary](https://github.com/1Revenger1/ectool)
-- Move the binary to /usr/bin or /usr/local/bin
-- Download the installer with x86_64 in its name
-- Run the Chrultrabook Tools Installer
-- Drag the Chrultrabook Tools app into the Applications folder
-- Open the app
+## 致谢与许可证
 
----
-
-## Built Using
-
-- Tauri 2.9.5
-- Angular 21
-- Rust 1.92
-- HTML5
-- CSS
-- TypeScript
-
----
-
-## Authors
-
-👤 **Robinson Arysseril**
-
-- GitHub: https://github.com/death7654
-
----
-
-## 🤝 Contributing
-
-Contributions, issues, and feature requests are welcome.
-
-[Issues page](https://github.com/death7654/Chrultrabook-Tools/issues?q=is%3Aissue+is%3Aopen+sort%3Aupdated-desc)  
-
-[Contributing guide](https://github.com/death7654/Chrultrabook-Tools/wiki/Contributing)
-
-[Feature requests](https://github.com/death7654/Chrultrabook-Tools/discussions)
-
----
-
-## Show Your Support
-
-Give a ⭐️ if this project helped you!
-
----
-
-## 📝 License
-
-This project is licensed under GPL-3.0:  
-https://github.com/death7654/Chrultrabook-Tools/blob/3.X.X/LICENSE
-
----
-
-## Disclaimer
-
-THE SOFTWARE IS PROVIDED “AS IS” AND WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND NONINFRINGEMENT. MISUSE OF THIS SOFTWARE COULD CAUSE SYSTEM INSTABILITY OR MALFUNCTION.
+- 原项目：[death7654/Chrultrabook-Tools](https://github.com/death7654/Chrultrabook-Tools)
+- 原作者：Robinson Arysseril / death7654
+- 修复维护：Fanqi-dev
+- 许可证：[GPL-3.0](LICENSE)
