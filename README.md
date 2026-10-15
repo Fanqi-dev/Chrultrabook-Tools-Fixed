@@ -73,7 +73,7 @@ Windows GitHub Actions 会先运行浏览器和 Rust 回归测试，再生成 ex
 
 请在 [Issues](https://github.com/Fanqi-dev/Chrultrabook-Tools-Fixed/issues) 说明设备型号、Windows / EC 驱动版本、操作步骤、预期与实际结果。提交日志前检查其中是否包含不想公开的信息。
 
-面向原项目的修复会通过单独的上游 fork 和 Pull Request 提交，便于原作者按其项目策略评审。
+已向原项目提交 [修复 PR #310](https://github.com/death7654/Chrultrabook-Tools/pull/310)，使用单独的上游 fork 保留原项目历史，便于原作者审阅。上游贡献分支继续使用 EC Auto；本仓库的软件 Auto 策略独立保留。
 
 ## 致谢与许可证
 
