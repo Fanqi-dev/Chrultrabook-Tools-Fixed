@@ -1,0 +1,48 @@
+<div class="position-relative overflow-y-auto" style="height: 100vh">
+  <div class="container-fluid p-3 keyboard_container">
+    <div class="row align-items-center mb-3">
+      <div class="col-4 p-0 m-0">
+        <h4 class="fs-3 mb-0">
+          <img
+            [src]="current_img"
+            class="align-text-middle px-2"
+            alt="Keyboard"
+          />
+          {{ current_title }}
+        </h4>
+      </div>
+      <div class="col-2"></div>
+      <div class="col-3 text-end">
+        <button
+          class="btn btn-outline-secondary fs-4 border-0 w-100 h-100"
+          [class]="remap"
+          routerLink="remap"
+          (click)="keyboard_remap()"
+          data-bs-toggle="button"
+        >
+          <span class="p-0 m-0">Keyboard Remapping</span>
+        </button>
+      </div>
+      <div class="col-3">
+        <button
+          class="btn btn-outline-secondary fs-4 border-0 ms-2 w-100 h-100"
+          [class]="rgb_class"
+          routerLink="rgb"
+          (click)="rgb()"
+          data-bs-toggle="button"
+          [disabled]="rgb_enabled"
+        >
+          RGB Keyboards
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div class="container-fluid p-0">
+    <div class="row p-0 m-0">
+      <div class="col-12 outlet">
+        <router-outlet></router-outlet>
+      </div>
+    </div>
+  </div>
+</div>

@@ -1,0 +1,11 @@
+.activity_light {
+  grid-template-columns: 2.1fr 1fr;
+}
+
+.form-select {
+  height: 3.8rem;
+}
+
+.disabled {
+  filter: brightness(0.5);
+}

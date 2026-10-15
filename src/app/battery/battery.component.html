@@ -1,0 +1,89 @@
+<div
+  class="mt-4 container-fluid p-0 align-items-center px-3"
+  data-bs-theme="dark"
+>
+  <div class="row">
+    <div class="col">
+      <h4 class="fs-4 fw-heavy">
+        <img
+          src="../../../assets/battery/battery.svg"
+          class="align-text-middle px-2"
+          alt="battery"
+        />Battery Controls
+      </h4>
+    </div>
+  </div>
+  <div class="row">
+    <div class="col-2">
+      <label for="chargecontrol" class="col-form-label">Charge Control</label>
+    </div>
+    <div class="col-7">
+      <input
+        type="number"
+        id="chargecontrol"
+        class="form-control m-0 w-100 h-100"
+        placeholder="Value"
+        [disabled]="oldec"
+      />
+    </div>
+    <div class="col-3">
+      <button
+        type="button"
+        class="btn btn-outline-secondary border-0 fs-4 w-100 h-100"
+        [disabled]="oldec"
+        (click)="apply_limits()"
+      >
+        Apply
+      </button>
+    </div>
+  </div>
+  <div class="row pt-3">
+    <div class="col-2">
+      <label for="batterymode" class="col-form-label">Set Battery Mode</label>
+    </div>
+    <div class="col-7">
+      <select
+        class="form-select text-white border-0 fs-4 bg-secondary rounded-1 w-100 h-100"
+        id="mode_battery"
+        #dropdown
+      >
+        <option value="normal" selected>Normal</option>
+        <option value="idle">Idle</option>
+        <option value="discharge">Discharge</option>
+      </select>
+    </div>
+    <div class="col-3">
+      <button
+        type="button"
+        class="btn btn-outline-secondary border-0 fs-4 w-100 h-100"
+        (click)="apply_mode()"
+      >
+        Apply
+      </button>
+    </div>
+  </div>
+  <div class="row pt-3">
+    <div class="col-2">
+      <label for="batterymode" class="col-form-label"
+        >Battery Current Limit</label
+      >
+    </div>
+    <div class="col-7">
+      <input
+        type="number"
+        id="maxcurrent"
+        class="form-control m-0 h-100 w-100"
+        placeholder="Value in mA"
+      />
+    </div>
+    <div class="col-3">
+      <button
+        type="button"
+        class="btn btn-outline-secondary border-0 fs-4 w-100 h-100"
+        (click)="apply_maximum_current()"
+      >
+        Apply
+      </button>
+    </div>
+  </div>
+</div>

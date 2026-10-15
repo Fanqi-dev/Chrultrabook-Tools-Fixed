@@ -1,0 +1,573 @@
+// Prevents additional console window on Windows in release, DO NOT REMOVE!!
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
+mod activity_light;
+mod custom_fan;
+mod execute;
+mod get_all_windows;
+mod helper;
+mod keyboard_remap;
+mod open_window;
+mod save_to_files;
+mod save_to_local;
+mod temps;
+
+//external crates
+use std::fs;
+use tauri::image::Image;
+use tauri::menu::{IconMenuItemBuilder, MenuBuilder, MenuItemBuilder};
+use tauri::tray::TrayIconBuilder;
+use tauri::{AppHandle, Emitter, EventTarget, Manager};
+use tauri_plugin_autostart::{MacosLauncher, ManagerExt};
+use tauri_plugin_clipboard_manager::ClipboardExt;
+use tauri_plugin_dialog::DialogExt;
+
+#[cfg(target_os = "windows")]
+use winreg::enums::*;
+#[cfg(target_os = "windows")]
+use winreg::RegKey;
+
+//open windows
+#[tauri::command]
+async fn open_window(
+    handle: tauri::AppHandle,
+    window: tauri::Window,
+    name: &str,
+    width: f64,
+    height: f64,
+    _zoom: f64,
+) -> Result<(), ()> {
+    let window_open = get_all_windows::window(&window, name);
+    if window_open {
+        window.get_webview_window(name).unwrap().show().unwrap();
+    } else {
+        open_window::new_window(&handle, name, name, width, height, true).await;
+        #[cfg(windows)]
+        {
+            setzoom(handle, _zoom);
+        }
+    }
+    Ok(())
+}
+
+//commands
+#[tauri::command]
+fn execute(handle: tauri::AppHandle, program: &str, arguments: Vec<String>, reply: bool) -> String {
+    execute::execute_relay(handle, program, arguments, reply)
+}
+
+#[tauri::command]
+fn get_sensors(handle: tauri::AppHandle) -> String {
+    let command: Vec<String> = vec!["temps".to_string(), "all".to_string()];
+    let output = execute(handle, "ectool", command, true);
+    let mut sensors = String::from("");
+    for line in output.lines() {
+        let line = line.trim();
+
+        // Skip the header and any empty lines
+        if line.is_empty() || line.starts_with("--") {
+            continue;
+        }
+
+        // Get the first word as the sensor name
+        if let Some(sensor_name) = line.split_whitespace().next() {
+            sensors.push_str(sensor_name);
+            sensors.push('\n');
+        }
+    }
+    sensors
+}
+
+#[tauri::command]
+fn diagnostics(handle: tauri::AppHandle, selected: &str) -> String {
+    let output = match selected {
+        "Boot Timestraps" => execute(handle, "cbmem", helper::to_vec_string(vec!["-t"]), true),
+        "Coreboot Log" => execute(handle, "cbmem", helper::to_vec_string(vec!["-c1"]), true),
+        "Coreboot Extended Log" => {
+            execute(handle, "cbmem", helper::to_vec_string(vec!["-c"]), true)
+        }
+        "EC Console Log" => execute(
+            handle,
+            "ectool",
+            helper::to_vec_string(vec!["console"]),
+            true,
+        ),
+        "Battery Information" => execute(
+            handle,
+            "ectool",
+            helper::to_vec_string(vec!["battery"]),
+            true,
+        ),
+        "EC Chip Information" => execute(
+            handle,
+            "ectool",
+            helper::to_vec_string(vec!["chipinfo"]),
+            true,
+        ),
+        "SPI Information" => execute(
+            handle,
+            "ectool",
+            helper::to_vec_string(vec!["flashspiinfo"]),
+            true,
+        ),
+        "EC Protocol Information" => execute(
+            handle,
+            "ectool",
+            helper::to_vec_string(vec!["protoinfo"]),
+            true,
+        ),
+        "Temperature Sensor Information" => execute(
+            handle,
+            "ectool",
+            helper::to_vec_string(vec!["tempsinfo", "all"]),
+            true,
+        ),
+        "Power Delivery Information" => {
+            execute(handle, "ectool", helper::to_vec_string(vec!["pdlog"]), true)
+        }
+        "cbi0" => execute(
+            handle,
+            "ectool",
+            helper::to_vec_string(vec!["cbi", "get", "0"]),
+            true,
+        ),
+        "cbi1" => execute(
+            handle,
+            "ectool",
+            helper::to_vec_string(vec!["cbi", "get", "1"]),
+            true,
+        ),
+        "cbi2" => execute(
+            handle,
+            "ectool",
+            helper::to_vec_string(vec!["cbi", "get", "2"]),
+            true,
+        ),
+        "cbi3" => execute(
+            handle,
+            "ectool",
+            helper::to_vec_string(vec!["cbi", "get", "3"]),
+            true,
+        ),
+        "cbi4" => execute(
+            handle,
+            "ectool",
+            helper::to_vec_string(vec!["cbi", "get", "4"]),
+            true,
+        ),
+        "cbi5" => execute(
+            handle,
+            "ectool",
+            helper::to_vec_string(vec!["cbi", "get", "5"]),
+            true,
+        ),
+        "cbi6" => execute(
+            handle,
+            "ectool",
+            helper::to_vec_string(vec!["cbi", "get", "6"]),
+            true,
+        ),
+        "cbi7" => execute(
+            handle,
+            "ectool",
+            helper::to_vec_string(vec!["cbi", "get", "7"]),
+            true,
+        ),
+        "cbi8" => execute(
+            handle,
+            "ectool",
+            helper::to_vec_string(vec!["cbi", "get", "8"]),
+            true,
+        ),
+        "cbi9" => execute(
+            handle,
+            "ectool",
+            helper::to_vec_string(vec!["cbi", "get", "9"]),
+            true,
+        ),
+        "cbi10" => execute(
+            handle,
+            "ectool",
+            helper::to_vec_string(vec!["cbi", "get", "10"]),
+            true,
+        ),
+        _ => "Select An Option".to_string(),
+    };
+    let cleaned: String = output
+        .lines()
+        .filter(|line| !line.trim().is_empty()) // Keep non-empty lines
+        .collect::<Vec<_>>()
+        .join("\n");
+    cleaned
+}
+
+#[tauri::command]
+fn copy(handle: tauri::AppHandle, text: String) {
+    handle.clipboard().write_text(text).unwrap();
+}
+
+#[tauri::command]
+fn save(app: tauri::AppHandle, filename: String, content: String) {
+    save_to_files::select_path(app, filename, content);
+}
+
+#[tauri::command]
+fn local_storage(function: &str, option: &str, value: &str) -> String {
+    save_to_local::local_storage(function, option, value)
+}
+
+#[tauri::command]
+fn get_temps(handle: tauri::AppHandle) -> u16 {
+    let temps = execute(
+        handle,
+        "ectool",
+        helper::to_vec_string(vec!["temps", "all"]),
+        true,
+    );
+    let mut sensors = local_storage("get", "sensor_selection", "");
+
+    let changes = sensors
+        .split(|c: char| !c.is_alphanumeric())
+        .any(|word| word.eq_ignore_ascii_case("false"));
+
+    if !changes {
+        sensors = "".to_string();
+    }
+    temps::get_temp(temps, sensors, changes)
+}
+
+#[tauri::command]
+fn boardname(handle: tauri::AppHandle) -> String {
+    #[cfg(windows)]
+    {
+        let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
+
+        hklm.open_subkey("HARDWARE\\DESCRIPTION\\System\\BIOS")
+            .and_then(|bios_key| bios_key.get_value::<String, _>("BaseBoardProduct"))
+            .unwrap_or_else(|_| String::from("Unknown"))
+    }
+    #[cfg(target_os = "linux")]
+    {
+        execute::execute_relay(
+            handle,
+            "cat",
+            vec!["/sys/class/dmi/id/product_name".to_string()],
+            true,
+        )
+        .trim()
+        .to_string()
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        String::from("unknown")
+    }
+}
+
+#[tauri::command]
+#[allow(unreachable_code)]
+fn os() -> String {
+    #[cfg(target_os = "macos")]
+    {
+        return String::from("macOS");
+    }
+    #[cfg(target_os = "linux")]
+    {
+        return String::from("linux");
+    }
+
+    String::from("not macOS")
+}
+
+#[tauri::command]
+fn change_activity_light(selected: String) {
+    activity_light::set_color(selected);
+}
+
+#[tauri::command]
+fn autostart(app: AppHandle, value: bool) {
+    let autolaunch = app.autolaunch();
+
+    let enabled_state = autolaunch.is_enabled().unwrap_or(false);
+    if value || !enabled_state {
+        let _ = autolaunch.enable();
+    } else if !value || enabled_state {
+        let _ = autolaunch.disable();
+    }
+}
+
+#[tauri::command]
+async fn get_fan_json() -> String {
+    let output = local_storage("get", "profiles", "");
+    let default_array = String::from("[{\"id\":0,\"name\":\"Default\",\"array\":[0,10,25,40,60,80,95,100,100,100,100,100,100],\"selected\":true,\"disabled\":true,\"class\":\"transparent\",\"img_class\":\"btn-outline-info\",\"img\":\"\\uF4CB\"},{\"id\":1,\"name\":\"Aggressive\",\"array\":[0,10,40,50,60,90,100,100,100,100,100,100,100],\"selected\":false,\"disabled\":true,\"class\":\"transparent\",\"img_class\":\"btn-outline-info\",\"img\":\"\\uF4CB\"},{\"id\":2,\"name\":\"Quiet\",\"array\":[0,15,20,30,40,55,90,100,100,100,100,100,100],\"selected\":false,\"disabled\":true,\"class\":\"transparent\",\"img_class\":\"btn-outline-info\",\"img\":\"\\uF4CB\"}]");
+    if !output.contains("[") {
+        default_array
+    } else {
+        output
+    }
+}
+
+#[tauri::command]
+async fn get_rgb_json() -> String {
+    local_storage("get", "rgbprofiles", "")
+}
+
+#[tauri::command]
+fn set_custom_fan(handle: tauri::AppHandle, temp: u16, array: Vec<u8>) {
+    // B3: ignore unset/zero temps so startup never writes fanduty 0.
+    if temp == 0 {
+        return;
+    }
+    let fan_speed = custom_fan::calculate_fan_percentage(temp, array).to_string();
+    execute::execute_relay(
+        handle,
+        "ectool",
+        helper::to_vec_string(vec!["fanduty", &fan_speed]),
+        false,
+    );
+}
+
+#[tauri::command]
+fn transfer_fan_curves(app: AppHandle, curves: String) {
+    app.emit_to(EventTarget::webview_window("main"), "fan_curve", &curves)
+        .expect("failure to transmit data");
+}
+
+#[tauri::command]
+fn transfer_rgb(app: AppHandle, rgb: String) {
+    println!("{}", &rgb);
+    app.emit_to(EventTarget::webview_window("main"), "rgb", &rgb)
+        .expect("failure to transmit data");
+}
+
+#[tauri::command]
+fn setzoom(handle: tauri::AppHandle, scale: f64) {
+    let windows = handle.webview_windows();
+    for (_, window) in windows.iter() {
+        let _ = window.set_zoom(scale);
+    }
+}
+
+#[tauri::command]
+fn reset(handle: tauri::AppHandle) {
+    let _ = local_storage("remove", "fan_boot", "");
+    let _ = local_storage("remove", "start_app_tray", "");
+    let _ = local_storage("remove", "sensor_selection", "");
+    let _ = local_storage("remove", "app_tray", "");
+    let _ = local_storage("remove", "zoom", "");
+    let _ = local_storage("remove", "profiles", "");
+    let _ = local_storage("remove", "app_boot", "");
+    let _ = local_storage("remove", "rgb", "");
+    autostart(handle.clone(), false);
+
+    handle.restart();
+}
+#[tauri::command]
+fn get_remap_json(hard_reset: bool) -> String {
+    keyboard_remap::read_config(hard_reset)
+}
+
+#[tauri::command]
+fn set_remap(handle: tauri::AppHandle, params: String) -> bool {
+    let created_backup: String = local_storage("get", "keyboard_backup", " ");
+    if created_backup.is_empty() {
+        let output = keyboard_remap::create_backup();
+        if let Err(e) = output {
+            println!("Error: {}", e);
+            return false;
+        }
+    }
+
+    let buffer: Vec<u8> = match keyboard_remap::generate_config_from_json(&params) {
+        Ok(b) => b,
+        Err(e) => {
+            println!("Error {}", e);
+            return false;
+        }
+    };
+
+    let execution_handle = handle.clone();
+    let buffer_clone = buffer.clone();
+
+    handle
+        .dialog()
+        .file()
+        .set_file_name("croskbsettings.bin")
+        .set_directory("C:/Windows/System32/drivers")
+        .add_filter("Binary File", &["bin"])
+        .save_file(move |file_path| {
+            if let Some(file) = file_path {
+                match fs::write(file.to_string(), &buffer_clone) {
+                    Ok(_) => {
+                        execute::execute_relay(execution_handle, "keyboard", Vec::new(), false);
+                    }
+                    Err(e) => {
+                        println!("Error writing file: {}", e);
+                    }
+                }
+            } else {
+                println!("File save cancelled by user.");
+            }
+        });
+
+    true
+}
+
+#[tauri::command]
+fn reset_remap() -> bool {
+    // TODO: Not implemented? -9l
+    true
+}
+
+fn main() {
+    tauri::Builder::default()
+        .plugin(tauri_plugin_process::init())
+        .setup(|app| {
+            //to hide app if user wants it hidden upon boot
+            let start_app_in_tray = local_storage("get", "start_app_tray", " ");
+            if start_app_in_tray == "true" {
+                let window = app.get_webview_window("main").unwrap();
+                window.hide().unwrap();
+            }
+
+            let img = IconMenuItemBuilder::new("Chrultrabook Tools")
+                .id("app")
+                .enabled(false)
+                .icon(Image::from_bytes(include_bytes!("../icons/icon.png")).unwrap())
+                .build(app)
+                .unwrap();
+            let show = MenuItemBuilder::new("Show").id("show").build(app).unwrap();
+            let hide = MenuItemBuilder::new("Hide").id("hide").build(app).unwrap();
+            let quit = MenuItemBuilder::new("Quit").id("quit").build(app).unwrap();
+            let github = MenuItemBuilder::new("Check for Updates")
+                .id("github")
+                .build(app)
+                .unwrap();
+
+            // we could opt handle an error case better than calling unwrap
+            let menu = MenuBuilder::new(app)
+                .item(&img)
+                .separator()
+                .items(&[&show, &hide, &quit])
+                .separator()
+                .item(&github)
+                .build()
+                .unwrap();
+
+            let _ = TrayIconBuilder::new()
+                .icon(app.default_window_icon().unwrap().clone())
+                .menu(&menu)
+                .on_menu_event(|app, event| match event.id().as_ref() {
+                    "quit" => app.exit(0),
+                    "hide" => {
+                        let window = app.webview_windows();
+                        for (_, window) in window.iter() {
+                            let _ = window.hide();
+                        }
+                    }
+                    "show" => {
+                        let window = app.webview_windows();
+                        for (_, window) in window.iter() {
+                            let _ = window.show();
+                        }
+                    }
+                    "github" => {
+                        let _ =
+                            open::that("https://github.com/death7654/Chrultrabook-Tools/releases");
+                    }
+                    _ => {}
+                })
+                .tooltip("Chrultrabook Tools")
+                .build(app);
+
+            // B6: detect sleep→wake via wall-clock jump and ask the UI to
+            // re-assert the custom fan curve within a few seconds.
+            let resume_handle = app.handle().clone();
+            std::thread::spawn(move || {
+                loop {
+                    let wall_before = std::time::SystemTime::now();
+                    std::thread::sleep(std::time::Duration::from_secs(1));
+                    let jumped = wall_before
+                        .elapsed()
+                        .map(|d| d.as_secs() >= 3)
+                        .unwrap_or(false);
+                    if jumped {
+                        let _ = resume_handle.emit("system_resume", ());
+                    }
+                }
+            });
+            Ok(())
+        })
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                let close_app_to_tray = local_storage("get", "app_tray", " ");
+                if close_app_to_tray == "true" {
+                    if window.label() == "main" {
+                        let windows = window.webview_windows();
+                        for (_, window) in windows.iter() {
+                            let window_name = window.label();
+                            if window_name == "main" {
+                                window.hide().unwrap()
+                            } else {
+                                window
+                                    .get_webview_window(window_name)
+                                    .expect("notfound")
+                                    .close()
+                                    .unwrap()
+                            }
+                        }
+                        api.prevent_close();
+                    } else {
+                        window.close().unwrap();
+                    }
+                } else if window.label() == "main" {
+                    let windows = window.webview_windows();
+                    for (_, window) in windows.iter() {
+                        let window_name = window.label();
+                        window
+                            .get_webview_window(window_name)
+                            .expect("notfound")
+                            .close()
+                            .unwrap()
+                    }
+                } else {
+                    let _ = window.close();
+                }
+            }
+        })
+        .plugin(tauri_plugin_autostart::init(
+            MacosLauncher::LaunchAgent,
+            Some(vec!["--auto"]),
+        ))
+        .plugin(tauri_plugin_fs::init())
+        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_single_instance::init(|_app, _args, _cwd| {}))
+        .plugin(tauri_plugin_clipboard_manager::init())
+        .plugin(tauri_plugin_shell::init())
+        .invoke_handler(tauri::generate_handler![
+            open_window,
+            execute,
+            get_sensors,
+            diagnostics,
+            copy,
+            save,
+            local_storage,
+            get_temps,
+            boardname,
+            os,
+            change_activity_light,
+            autostart,
+            get_fan_json,
+            get_rgb_json,
+            set_custom_fan,
+            transfer_fan_curves,
+            transfer_rgb,
+            setzoom,
+            reset,
+            get_remap_json,
+            set_remap,
+            reset_remap,
+        ])
+        .run(tauri::generate_context!())
+        .expect("error while running tauri application");
+}

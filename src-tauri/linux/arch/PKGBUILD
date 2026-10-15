@@ -1,0 +1,27 @@
+# Maintainer: Robinson George Arysseril
+pkgname=chrultrabook-tools
+
+_pkgver=$(grep -oP '"version":\s*"\K[^"]+' tauri.conf.json)
+pkgver=${_pkgver:-1.0.0}
+pkgrel=1
+pkgdesc="User-friendly configuration utility for Chromebooks running an alternate OS"
+arch=('x86_64')
+url="https://github.com/death7654/chrultrabook-tools"
+license=('GPL-3.0')
+depends=('cairo' 'desktop-file-utils' 'gdk-pixbuf2' 'glib2' 'gtk3' 'hicolor-icon-theme' 'libsoup' 'pango' 'webkit2gtk-4.1' 'libftdi' 'coreboot-utils-debug')
+options=('!strip' '!debug')
+install=chrultrabook_tools.install
+source_x86_64=(../deb/*.deb)
+sha256sums_x86_64=('SKIP')
+
+package() {
+  cd "$srcdir"
+
+  # Find the .deb file
+  local deb_file=$(find . -name '*.deb' | head -n 1)
+
+  # Extract the .deb (ar archive)
+  ar x "$deb_file"
+
+  tar -xvf data.tar.gz -C "${pkgdir}"
+}

@@ -1,0 +1,57 @@
+.keyboard_container {
+  min-height: calc(100vh + 400px);
+}
+.key-btn {
+  min-width: 40px;
+  height: 40px;
+  padding: 0.25rem;
+  font-size: 0.8rem;
+}
+
+.key-btn.key-remapped::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 5px;
+  height: 5px;
+  background: #ffc107;
+  border-radius: 50%;
+}
+
+.key-btn.remap-mode:hover {
+  border-color: #daa520;
+}
+
+.keyboard-display.rgb-enabled .key-btn {
+  box-shadow: 0 0 8px var(--rgb-color);
+}
+
+.color-preview {
+  height: 50px;
+  border: 2px solid #363639;
+}
+
+@media (max-width: 992px) {
+  .key-btn {
+    min-width: 35px;
+    height: 35px;
+    font-size: 0.75rem;
+  }
+}
+
+@media (max-width: 768px) {
+  .key-btn {
+    min-width: 30px;
+    height: 30px;
+    font-size: 0.7rem;
+  }
+}
+
+@media (max-width: 576px) {
+  .key-btn {
+    min-width: 25px;
+    height: 25px;
+    font-size: 0.65rem;
+  }
+}

@@ -1,0 +1,62 @@
+{
+  "build": {
+    "beforeDevCommand": "npm run start",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist/chrultrabook-tools/browser",
+    "devUrl": "http://localhost:1420"
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["deb", "rpm", "msi", "nsis", "dmg"],
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "licenseFile": "../LICENSE",
+    "license": "GPL-3.0",
+    "linux": {
+      "deb": {
+        "depends": ["chromium-ectool", "cbmem"],
+        "desktopTemplate": "./linux/chrultrabook-tools.desktop",
+        "files": {
+          "/usr/bin/chrultrabook-tools-root": "./linux/chrultrabook-tools-root",
+          "/usr/share/polkit-1/actions/com.chrultrabook.tools.policy": "./linux/com.chrultrabook.tools.policy",
+          "/usr/share/doc/chrultrabook-tools/README.md": "../README.md",
+          "/usr/share/licenses/chrultrabook-tools/LICENSE": "../LICENSE"
+        }
+      },
+      "rpm": {
+        "depends": ["coreboot-utils-cbmem", "chromium-ectool", "polkit"],
+        "desktopTemplate": "./linux/chrultrabook-tools.desktop",
+        "files": {
+          "/usr/bin/chrultrabook-tools-root": "./linux/chrultrabook-tools-root",
+          "/usr/share/polkit-1/actions/com.chrultrabook.tools.policy": "./linux/com.chrultrabook.tools.policy",
+          "/usr/share/doc/chrultrabook-tools/README.md": "../README.md",
+          "/usr/share/licenses/chrultrabook-tools/LICENSE": "../LICENSE"
+        }
+      }
+    }
+  },
+  "productName": "chrultrabook-tools",
+  "version": "3.1.7",
+  "identifier": "com.chrultrabook.tools",
+  "plugins": {},
+  "app": {
+    "security": {
+      "csp": null
+    },
+    "windows": [
+      {
+        "title": "Chrultrabook Tools",
+        "width": 430,
+        "height": 520,
+        "maximizable": true,
+        "resizable": true,
+        "theme": "Dark"
+      }
+    ]
+  }
+}

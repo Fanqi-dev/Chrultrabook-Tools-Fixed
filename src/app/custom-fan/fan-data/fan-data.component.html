@@ -1,0 +1,52 @@
+<div class="container2 p-2 pt-0 h-100">
+  <div class="options pb-3 h-100 m-1">
+    <div class="p-0 m-0">
+      <select id="time" class="form-select text-white bg-secondary fs-4 h-100">
+        <option selected value="1000">1 Second</option>
+        <option value="5000">5 Seconds</option>
+        <option value="10000">10 Seconds</option>
+        <option value="30000">30 Seconds</option>
+        <option value="60000">60 Seconds</option>
+        <option value="120000">120 Seconds</option>
+        <option value="300000">300 Seconds</option>
+        <option value="600000">600 Seconds</option>
+      </select>
+    </div>
+    <button
+      class="btn border-0 btn-outline-secondary fs-4 m-1 mb-0 mt-0 h-100"
+      (click)="collect()"
+    >
+      {{ button_label }}
+    </button>
+    <button
+      class="btn border-0 btn-outline-secondary fs-4 m-1 mb-0 mt-0 h-100"
+      (click)="clear()"
+    >
+      Clear
+    </button>
+    <button
+      class="btn border-0 btn-outline-secondary fs-4 m-1 mb-0 mt-0 h-100"
+      (click)="retrieveCollectedData()"
+    >
+      {{ data_label }}
+    </button>
+  </div>
+  <div class="container3">
+    <canvas
+      class="bg-dark p-2 m-2 ms-0 rounded-3"
+      baseChart
+      #myChart="base-chart"
+      [data]="lineChartData"
+      [options]="lineChartOptions"
+      [type]="'line'"
+    ></canvas>
+    <canvas
+      class="bg-dark p-2 m-2 me-0 rounded-3"
+      baseChart
+      #myChart2="base-chart"
+      [data]="lineChartData2"
+      [options]="lineChartOptions"
+      [type]="'line'"
+    ></canvas>
+  </div>
+</div>

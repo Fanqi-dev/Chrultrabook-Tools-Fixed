@@ -1,0 +1,9 @@
+[Desktop Entry]
+Name=Chrultrabook Tools
+Comment=Chrultrabook Hardware Controller
+Exec=sh -c 'xhost +SI:localuser:root 2>/dev/null; pkexec env DISPLAY=$DISPLAY XAUTHORITY=$XAUTHORITY XDG_RUNTIME_DIR=$XDG_RUNTIME_DIR /usr/bin/chrultrabook-tools-root'
+Icon=chrultrabook-tools
+Terminal=false
+Type=Application
+Categories=Utility;
+StartupWMClass=chrultrabook-tools

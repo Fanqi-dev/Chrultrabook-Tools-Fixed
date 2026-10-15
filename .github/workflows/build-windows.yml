@@ -1,0 +1,53 @@
+name: build-windows
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, master]
+
+jobs:
+  build:
+    name: Build Windows exe (cloud runner, no local toolchain)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install Rust stable (MSVC)
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust build cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Fan editor browser regression tests
+        run: npm run test:fan
+
+      - name: Build app + installers (Tauri, MSVC)
+        run: npm run tauri build
+
+      - name: Curve-math unit tests (B4 gate)
+        run: cargo test calculate_fan_percentage
+        working-directory: src-tauri
+
+      - name: Upload raw exe
+        uses: actions/upload-artifact@v4
+        with:
+          name: chrultrabook-tools-win-exe
+          path: src-tauri/target/release/chrultrabook-tools.exe
+          if-no-files-found: error
+
+      - name: Upload installers (NSIS/MSI)
+        uses: actions/upload-artifact@v4
+        with:
+          name: chrultrabook-tools-win-installers
+          path: src-tauri/target/release/bundle/
+          if-no-files-found: ignore

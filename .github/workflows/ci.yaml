@@ -1,0 +1,113 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - 3.X.X
+  pull_request:
+  workflow_dispatch:
+
+env:
+  ubuntu-deps: "dpkg-dev fakeroot libwebkit2gtk-4.1-0 libwebkit2gtk-4.1-dev libjavascriptcoregtk-4.1-0 libjavascriptcoregtk-4.1-dev gir1.2-javascriptcoregtk-4.1 gir1.2-webkit2-4.1 build-essential curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev desktop-file-utils libudev-dev rpm libgtk-3-dev"
+
+jobs:
+  cargo-tests:
+    name: Cargo Tests
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: setup node
+        uses: actions/setup-node@v7
+        with:
+          node-version: lts/*
+          cache: "npm"
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable
+          components: clippy,rustfmt
+      - name: Install OS dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ${{ env.ubuntu-deps }}
+      - name: Build frontend
+        run: npm install && npm run build
+      - name: Set up Github Cache
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-
+      - name: Run Cargo:fmt
+        run: cargo fmt --manifest-path src-tauri/Cargo.toml --all -- --check
+      - name: Run Cargo:clippy
+        run: cargo clippy --manifest-path src-tauri/Cargo.toml --all-features -- -D warnings
+      - name: Run Cargo:test
+        run: cargo test --manifest-path src-tauri/Cargo.toml --verbose --all-features
+  build:
+    name: Build
+    needs: cargo-tests
+    strategy:
+      fail-fast: false
+      matrix:
+        platform:
+          - ubuntu-24.04
+          - windows-2022
+          - macos-15-intel
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: setup node
+        uses: actions/setup-node@v7
+        with:
+          node-version: lts/*
+          cache: "npm"
+      - name: Install Rust Stable
+        uses: dtolnay/rust-toolchain@stable
+      - name: Install OS dependencies
+        if: matrix.platform == 'ubuntu-24.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ${{ env.ubuntu-deps }}
+      - name: Install npm Dependencies
+        run: npm install
+      - name: Build
+        run: npm run tauri build
+  nix-check:
+    name: Nix Flake Checks
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: docker/setup-qemu-action@v4
+      - uses: cachix/install-nix-action@v31
+        with:
+          extra_nix_config: |
+            extra-platforms = aarch64-linux
+      - uses: actions/checkout@v7
+      - name: Run nix flake check
+        run: nix flake check --all-systems
+  nix-build:
+    name: Nix Build
+    needs: [nix-check, cargo-tests]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - nix: aarch64-linux
+            runner: ubuntu-24.04-arm
+          - nix: x86_64-linux
+            runner: ubuntu-24.04
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: cachix/install-nix-action@v31
+      - uses: cachix/cachix-action@v17
+        with:
+          name: death7654
+          authToken: "${{ secrets.CACHIX_AUTH_TOKEN }}"
+      - run: nix build -L .

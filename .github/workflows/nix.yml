@@ -1,0 +1,31 @@
+name: Update flake lockfile
+on:
+  workflow_dispatch:
+  # schedule:
+  #   - cron: "0 5 * * 1"
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  lockfile:
+    name: "Update lockfile"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: cachix/install-nix-action@v31
+      - name: Update flake.lock
+        run: |
+          set -Eeu
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          nix flake update --commit-lock-file
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@v8
+        with:
+          branch: ci/update
+          delete-branch: true
+          title: "Updates"
+          body: |
+            See commit messages for details

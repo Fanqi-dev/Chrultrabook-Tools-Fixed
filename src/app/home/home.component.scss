@@ -1,0 +1,22 @@
+.noectools {
+  z-index: 10;
+  background-color: #837685;
+  height: 2rem;
+  width: 90%;
+  position: absolute;
+  top: 75px;
+  left: 20px;
+}
+
+.displaynone {
+  display: none;
+}
+
+.height {
+  height: 100dvh;
+  -ms-overflow-style: none;
+}
+
+.height::-webkit-scrollbar {
+  width: 0;
+}
