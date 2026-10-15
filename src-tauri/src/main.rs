@@ -7,6 +7,7 @@ mod execute;
 mod get_all_windows;
 mod helper;
 mod keyboard_remap;
+mod keyboard_light;
 mod open_window;
 mod save_to_files;
 mod save_to_local;
@@ -67,6 +68,12 @@ async fn execute(handle: tauri::AppHandle, program: String, arguments: Vec<Strin
 #[tauri::command]
 async fn execute_checked(handle: tauri::AppHandle, program: String, arguments: Vec<String>) -> Result<String, String> {
     tauri::async_runtime::spawn_blocking(move || execute::execute_relay_checked(handle, &program, arguments, true))
+        .await.map_err(|error| error.to_string())?
+}
+
+#[tauri::command]
+async fn set_keyboard_brightness(handle: tauri::AppHandle, percentage: u8) -> Result<u8, String> {
+    tauri::async_runtime::spawn_blocking(move || execute::set_brightness(handle, percentage))
         .await.map_err(|error| error.to_string())?
 }
 
@@ -393,6 +400,7 @@ fn main() {
             open_window,
             execute,
             execute_checked,
+            set_keyboard_brightness,
             get_sensors,
             diagnostics,
             copy,

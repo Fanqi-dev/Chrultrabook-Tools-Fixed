@@ -14,7 +14,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - name: Test fan math, sensor parsing and atomic settings writes
         run: |
-          foreach ($module in @("custom_fan", "temps", "settings_file")) {
+          foreach ($module in @("custom_fan", "temps", "settings_file", "keyboard_light")) {
             rustc --test "src-tauri/src/$module.rs" -o "$module-tests.exe"
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
             & "./$module-tests.exe"

@@ -1,6 +1,7 @@
 //execute shell commands
 use tauri_plugin_shell::ShellExt;
 use std::sync::Mutex;
+use std::io::Write;
 static EC_ACCESS: Mutex<()> = Mutex::new(());
 
 //location of ectool excuteable
@@ -36,7 +37,17 @@ pub async fn execute(
 ) -> Result<String, String> {
     let shell = app.shell();
 
-    let output = shell.command(program).args(arguments).output().await;
+    let output = shell.command(program).args(&arguments).output().await;
+    if std::env::args().any(|argument| argument == "--trace-ec") {
+        let path = std::env::var("APPDATA").unwrap_or_else(|_| ".".into());
+        if let Ok(mut file) = std::fs::OpenOptions::new().create(true).append(true)
+            .open(std::path::Path::new(&path).join("chrultrabook-tools/ec-trace.log")) {
+            let readable = output.as_ref().map(|out| (
+                out.status.success(), String::from_utf8_lossy(&out.stdout).to_string(),
+                String::from_utf8_lossy(&out.stderr).to_string()));
+            let _ = writeln!(file, "{:?} {:?} => {:?}", std::time::SystemTime::now(), arguments, readable);
+        }
+    }
 
     match output {
             Ok(out) => {
@@ -84,4 +95,21 @@ pub fn execute_relay_checked(
         tauri::async_runtime::block_on(async { execute(&handle, program, arguments, reply).await });
 
     output
+}
+
+/// Keep write and verification together: fan polling cannot enter the EC in
+/// the middle of a keyboard-backlight update.
+pub fn set_brightness(handle: tauri::AppHandle, percentage: u8) -> Result<u8, String> {
+    if percentage > 100 { return Err("Invalid keyboard brightness".into()); }
+    let _guard = EC_ACCESS.lock().map_err(|_| "EC access lock failed".to_string())?;
+    tauri::async_runtime::block_on(async {
+        for _ in 0..3 {
+            execute(&handle, ECTOOL, vec!["pwmsetkblight".into(), percentage.to_string()], true).await?;
+            let response = execute(&handle, ECTOOL, vec!["pwmgetkblight".into()], true).await?;
+            let actual = crate::keyboard_light::parse_brightness(&response)?;
+            if actual == percentage { return Ok(actual); }
+            std::thread::sleep(std::time::Duration::from_millis(40));
+        }
+        Err("Keyboard brightness readback did not match the requested value".into())
+    })
 }

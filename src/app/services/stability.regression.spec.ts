@@ -25,8 +25,8 @@ describe("Keyboard brightness stability", () => {
   beforeEach(async () => {
     previous = (window as any).__TAURI_INTERNALS__;
     hardware = 0;
-    ipc = jasmine.createSpy("ipc").and.callFake((_cmd: string, args: any) => {
-      if (args.arguments[0] === "pwmsetkblight") { hardware = Number(args.arguments[1]); return Promise.resolve("Keyboard backlight set."); }
+    ipc = jasmine.createSpy("ipc").and.callFake((cmd: string, args: any) => {
+      if (cmd === "set_keyboard_brightness") { hardware = args.percentage; return Promise.resolve(hardware); }
       return Promise.resolve(hardware ? `Current keyboard backlight percent: ${hardware}` : "Keyboard backlight disabled.");
     });
     (window as any).__TAURI_INTERNALS__ = { invoke: ipc };
@@ -47,7 +47,7 @@ describe("Keyboard brightness stability", () => {
       expect(slider().disabled).toBeFalse(); expect(Number(slider().value)).toBe(value);
       expect(fixture.componentInstance.brightness()).toBe(value); expect(hardware).toBe(value);
     }
-    expect(ipc.calls.allArgs().filter((args) => args[1].arguments[0] === "pwmsetkblight").every((args) => args[1].arguments.every((value: any) => typeof value === "string"))).toBeTrue();
+    expect(ipc.calls.allArgs().filter((args) => args[0] === "set_keyboard_brightness").map((args) => args[1].percentage)).toEqual([30, 60, 0]);
   });
   it("keeps controls disabled until delayed detection completes", async () => {
     const read = deferred<string>(); ipc.and.returnValue(read.promise);
@@ -56,15 +56,15 @@ describe("Keyboard brightness stability", () => {
     expect(slider().disabled).toBeFalse(); expect(fixture.componentInstance.unsupported()).toBeFalse();
   });
   it("serializes rapid updates and keeps only the latest queued target", async () => {
-    await ready(); const first = deferred<string>(); let writes = 0;
-    ipc.and.callFake((_cmd: string, args: any) => {
-      if (args.arguments[0] === "pwmsetkblight") {
-        hardware = Number(args.arguments[1]); return ++writes === 1 ? first.promise : Promise.resolve("set");
+    await ready(); const first = deferred<number>(); let writes = 0;
+    ipc.and.callFake((cmd: string, args: any) => {
+      if (cmd === "set_keyboard_brightness") {
+        hardware = args.percentage; return ++writes === 1 ? first.promise : Promise.resolve(hardware);
       }
       return Promise.resolve(`Current keyboard backlight percent: ${hardware}`);
     });
     change(30); change(50); change(70);
-    expect(writes).toBe(1); first.resolve("set"); await flush(); await fixture.whenStable(); fixture.detectChanges();
+    expect(writes).toBe(1); first.resolve(30); await flush(); await fixture.whenStable(); fixture.detectChanges();
     expect(writes).toBe(2); expect(hardware).toBe(70); expect(Number(slider().value)).toBe(70);
   });
   it("rolls a failed write back without permanently disabling the slider", async () => {

@@ -2,7 +2,7 @@
 
 ## Confirmed defects and changes
 
-- Keyboard brightness: the real EC returns `Keyboard backlight disabled.` at 0%. This is a supported state, not missing hardware. Initialization now blocks premature input; writes are serialized and coalesce rapid input; readback confirms the result; failures restore the last confirmed value and allow retry. Refocusing the main window refreshes external brightness changes.
+- Keyboard brightness: the real EC returns `Keyboard backlight disabled.` at 0%. This is a supported state, not missing hardware. Initialization now blocks premature input; writes are serialized and coalesce rapid input. A single native transaction holds the EC lock across write and readback, retries mismatches, and rejects unconfirmed values. Failures restore the last confirmed value and allow retry. Refocusing the main window refreshes external brightness changes. Optional `--trace-ec` records local command diagnostics for native acceptance.
 - Angular startup: explicitly retain Zone.js change detection for legacy screens; hardware controls use signals for asynchronous status updates.
 - Fan editor: retain the earlier single main-window controller, apply acknowledgement, isolated draft curves, and viewport-based sizing. Opening Custom uses the latest saved zoom and focuses an existing window. A corrupt profile load falls back to the software Auto controller.
 - Auto: software curve with minimum 40% duty, reaching 100% at 55°C. Custom curves retain their saved points; unavailable temperature uses full speed.
@@ -21,7 +21,7 @@
 
 - 58 browser regression tests cover the reported fan/resize/brightness failures plus failure paths, stale responses, persistence, and lifecycle cleanup.
 - Frontend production compilation passes. Existing Sass deprecation notices and initial-bundle size warning remain; neither blocks compilation.
-- Windows cloud gates run 17 standalone Rust tests: 7 fan interpolation, 7 sensor parsing, 3 atomic settings-write tests, before generating the executable.
+- Windows cloud gates run 23 standalone Rust tests: 7 fan interpolation, 7 sensor parsing, 3 atomic settings-write and 6 brightness-response tests, before generating the executable.
 - This machine has no RGB keyboard support (`INVALID_COMMAND`). RGB hardware behavior is not claimed as verified. Custom RGB cycles remain hidden preview functionality, without a persistent hardware-cycle controller.
 - Battery charge/discharge changes, driver remapping and application reset are checked through mocked IPC and code review; this audit does not deliberately alter those hardware/system settings.
 - Native brightness/window/fan acceptance results and deployment hashes belong in the local release manifest after the cloud build succeeds.

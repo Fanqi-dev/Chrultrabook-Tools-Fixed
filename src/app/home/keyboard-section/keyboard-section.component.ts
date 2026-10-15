@@ -1,5 +1,6 @@
 import { Component, HostListener, OnDestroy, OnInit, signal } from "@angular/core";
 import { ec, parseBrightness } from "../../services/device";
+import { invoke } from "@tauri-apps/api/core";
 
 @Component({
   selector: "app-keyboard-section",
@@ -60,8 +61,7 @@ export class KeyboardSectionComponent implements OnInit, OnDestroy {
         const requested = this.pending;
         this.pending = undefined;
         try {
-          await ec(["pwmsetkblight", requested]);
-          const actual = parseBrightness(await ec(["pwmgetkblight"]));
+          const actual = await invoke<number>("set_keyboard_brightness", { percentage: requested });
           if (this.destroyed) return;
           this.confirmed = actual;
           if (this.pending === undefined) this.brightness.set(actual);
