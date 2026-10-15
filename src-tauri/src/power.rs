@@ -55,7 +55,7 @@ pub fn install(app: &AppHandle) -> Result<PowerNotifications, String> {
         if result != 0 { return Err(format!("Display power notification registration failed: {result}")); }
         let result = PowerRegisterSuspendResumeNotification(DEVICE_NOTIFY_CALLBACK, recipient, &mut suspend);
         if result != 0 {
-            PowerSettingUnregisterNotification(display);
+            PowerSettingUnregisterNotification(display as _);
             return Err(format!("Suspend notification registration failed: {result}"));
         }
     }
