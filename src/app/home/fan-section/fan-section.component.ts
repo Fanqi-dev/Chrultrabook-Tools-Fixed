@@ -28,6 +28,8 @@ export class FanSectionComponent implements OnInit, OnDestroy {
   zoom = 1;
   private revision = 0;
   private destroyed = false;
+  private powerActive = true;
+  private powerRevision = 0;
   private timer?: ReturnType<typeof setTimeout>;
   private unlisten: UnlistenFn[] = [];
   private writes: Promise<unknown> = Promise.resolve();
@@ -44,6 +46,25 @@ export class FanSectionComponent implements OnInit, OnDestroy {
       this.keepListener(await webview.listen("system_resume", () => {
         if (this.isCurveMode()) void this.writeMode(this.revision).catch(() => {});
       }));
+      this.keepListener(await webview.listen<boolean>("system_power", (event) => {
+        this.powerActive = event.payload;
+        ++this.powerRevision;
+        // During startup there is no mode or pending fan write to invalidate.
+        if (this.state().mode !== "unavailable") ++this.revision;
+        clearTimeout(this.timer);
+        if (this.powerActive && !this.destroyed) {
+          void this.writeMode(this.revision).catch(() => {});
+          if (this.fanAvailable()) this.schedulePoll();
+        }
+      }));
+      this.keepListener(await webview.listen<string>("fan_power_error", () => {
+        if (!this.destroyed) this.error.set("Unable to return fan control to firmware before sleep.");
+      }));
+      // Registration may have reported an initial screen-off state before the
+      // WebView was ready to listen. Query the backend as well.
+      const powerRevision = this.powerRevision;
+      const active = await invoke<boolean>("fan_power_active");
+      if (this.powerRevision === powerRevision) this.powerActive = active;
       if (this.destroyed) return;
       const output = await invoke<string>("execute", {
         program: "ectool", arguments: ["pwmgetfanrpm", "all"], reply: true,
@@ -74,7 +95,7 @@ export class FanSectionComponent implements OnInit, OnDestroy {
     } catch (error) {
       this.report(error);
     } finally {
-      if (!this.destroyed && this.fanAvailable()) this.schedulePoll();
+      if (!this.destroyed && this.powerActive && this.fanAvailable()) this.schedulePoll();
     }
   }
 
@@ -89,7 +110,7 @@ export class FanSectionComponent implements OnInit, OnDestroy {
 
   private report(error: unknown) {
     console.error("fan control:", error);
-    if (!this.destroyed) this.error.set("Unable to apply fan control. Please retry.");
+    if (!this.destroyed && this.powerActive) this.error.set("Unable to apply fan control. Please retry.");
   }
 
   async fan_auto() { return this.changeMode("auto", "Auto", AUTO_FAN_CURVE).catch(() => false); }
@@ -107,13 +128,13 @@ export class FanSectionComponent implements OnInit, OnDestroy {
 
   private writeMode(revision: number, sampledTemp?: number): Promise<boolean> {
     const write = this.writes.catch(() => {}).then(async () => {
-      if (this.destroyed || revision !== this.revision) return false;
+      if (this.destroyed || !this.powerActive || revision !== this.revision) return false;
       const state = this.state();
       if (state.mode === "off" || state.mode === "max") {
         await invoke("set_fan_duty", { duty: state.mode === "off" ? 0 : 100 });
       } else if (state.mode === "auto" || state.mode === "custom") {
         const temp = sampledTemp ?? await invoke<number>("get_temps");
-        if (this.destroyed || revision !== this.revision) return false;
+        if (this.destroyed || !this.powerActive || revision !== this.revision) return false;
         if (!Number.isFinite(temp) || temp <= 0) {
           this.temperature.set(null);
           await invoke("set_fan_duty", { duty: 100 });
@@ -154,22 +175,26 @@ export class FanSectionComponent implements OnInit, OnDestroy {
   }
 
   private schedulePoll() {
+    clearTimeout(this.timer);
+    if (this.destroyed || !this.powerActive) return;
     this.timer = setTimeout(() => { void this.poll(); }, 1000);
   }
 
   private async poll() {
+    const revision = this.revision;
     try {
+      if (this.destroyed || !this.powerActive) return;
       const temp = await invoke<number>("get_temps");
-      if (this.destroyed) return;
+      if (this.destroyed || !this.powerActive || revision !== this.revision) return;
       this.temperature.set(Number.isFinite(temp) && temp > 0 ? temp : null);
       const output = await invoke<string>("execute", {
         program: "ectool", arguments: ["pwmgetfanrpm", "all"], reply: true,
       });
-      if (this.destroyed) return;
+      if (this.destroyed || !this.powerActive || revision !== this.revision) return;
       this.updateRPM(output);
-      if (this.isCurveMode()) await this.writeMode(this.revision, temp);
-    } catch (error) { this.report(error); }
-    finally { if (!this.destroyed) this.schedulePoll(); }
+      if (this.isCurveMode()) await this.writeMode(revision, temp);
+    } catch (error) { if (revision === this.revision) this.report(error); }
+    finally { if (!this.destroyed && this.powerActive) this.schedulePoll(); }
   }
 
   async open_fan_custom_window() {

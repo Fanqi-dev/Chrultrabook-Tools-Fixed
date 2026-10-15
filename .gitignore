@@ -12,6 +12,7 @@
 /node_modules
 npm-debug.log
 /fan-mode-*.log
+/sleep-fan-*.log
 yarn-error.log
 
 # IDEs and editors

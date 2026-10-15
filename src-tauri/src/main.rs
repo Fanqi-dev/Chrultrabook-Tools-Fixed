@@ -4,6 +4,10 @@
 mod activity_light;
 mod custom_fan;
 mod execute;
+#[cfg(windows)]
+mod fan_power;
+#[cfg(windows)]
+mod power;
 mod get_all_windows;
 mod helper;
 mod keyboard_remap;
@@ -209,6 +213,9 @@ async fn set_fan_duty(handle: tauri::AppHandle, window: tauri::Window, duty: u8)
 }
 
 #[tauri::command]
+fn fan_power_active() -> bool { execute::fan_power_active() }
+
+#[tauri::command]
 async fn set_custom_fan(handle: tauri::AppHandle, window: tauri::Window, temp: u16, array: Vec<u8>) -> Result<(), String> {
     if temp == 0 || array.len() < 12 || array.iter().any(|value| *value > 100) {
         return Err("Invalid fan curve or temperature".into());
@@ -348,22 +355,27 @@ fn main() {
                 .tooltip("Chrultrabook Tools")
                 .build(app);
 
-            // B6: detect sleep→wake via wall-clock jump and ask the UI to
-            // re-assert the custom fan curve within a few seconds.
-            let resume_handle = app.handle().clone();
-            std::thread::spawn(move || {
-                loop {
-                    let wall_before = std::time::SystemTime::now();
-                    std::thread::sleep(std::time::Duration::from_secs(1));
-                    let jumped = wall_before
-                        .elapsed()
-                        .map(|d| d.as_secs() >= 3)
-                        .unwrap_or(false);
-                    if jumped {
-                        let _ = resume_handle.emit("system_resume", ());
+            #[cfg(windows)]
+            app.manage(power::install(app.handle()).map_err(std::io::Error::other)?);
+
+            // Non-Windows fallback: detect sleep→wake via wall-clock jump.
+            #[cfg(not(windows))]
+            {
+                let resume_handle = app.handle().clone();
+                std::thread::spawn(move || {
+                    loop {
+                        let wall_before = std::time::SystemTime::now();
+                        std::thread::sleep(std::time::Duration::from_secs(1));
+                        let jumped = wall_before
+                            .elapsed()
+                            .map(|d| d.as_secs() >= 3)
+                            .unwrap_or(false);
+                        if jumped {
+                            let _ = resume_handle.emit("system_resume", ());
+                        }
                     }
-                }
-            });
+                });
+            }
             Ok(())
         })
         .on_window_event(|window, event| {
@@ -397,6 +409,7 @@ fn main() {
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_shell::init())
         .invoke_handler(tauri::generate_handler![
+            fan_power_active,
             open_window,
             execute,
             execute_checked,

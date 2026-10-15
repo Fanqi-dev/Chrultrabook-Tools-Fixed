@@ -27,6 +27,7 @@ describe("Fan mode ownership and Apply integration", () => {
       if (override !== undefined) return override;
       if (cmd === "execute") return "Fan 0 RPM: 8100\nFan 1 RPM: 8200\n";
       if (cmd === "get_temps") return 48;
+      if (cmd === "fan_power_active") return true;
       if (cmd === "get_fan_json") return JSON.stringify(profiles);
       if (cmd === "local_storage") return args.option === "fan_boot" ? "false" : "";
       if (cmd === "transfer_fan_curves") return emit("fan_curve", args.curves);
@@ -175,6 +176,97 @@ describe("Fan mode ownership and Apply integration", () => {
     fixture.detectChanges();
     await flush();
     expect(ipc).not.toHaveBeenCalled();
+  });
+
+  it("screen-off pauses polling and keeps the selected Custom curve for screen-on", async () => {
+    await start();
+    await emit("fan_curve", { requestId: "sleep-custom", name: "Cooling User", array: custom });
+    await flush();
+    await emit("system_power", false);
+    await flush();
+    ipc.calls.reset();
+    await (fixture.componentInstance as any).poll();
+    expect(ipc).not.toHaveBeenCalled();
+    assertMode("Cooling User", 3);
+    await emit("system_power", true);
+    await flush();
+    assertMode("Cooling User", 3);
+    expect(ipc).toHaveBeenCalledWith("set_custom_fan", { temp: 48, array: custom });
+  });
+
+  it("a pending temperature sample from before sleep cannot write after wake", async () => {
+    await start();
+    let finishTemp!: (value: number) => void;
+    const pendingTemp = new Promise<number>((resolve) => { finishTemp = resolve; });
+    let first = true;
+    hook = (cmd) => {
+      if (cmd === "get_temps" && first) { first = false; return pendingTemp; }
+      return undefined;
+    };
+    ipc.calls.reset();
+    const stale = fixture.componentInstance.fan_auto();
+    await flush();
+    await emit("system_power", false);
+    await emit("system_power", true);
+    finishTemp(95);
+    await stale;
+    await flush();
+    expect(ipc.calls.allArgs().filter(([cmd]) => cmd === "set_custom_fan"))
+      .toEqual([["set_custom_fan", { temp: 48, array: [...AUTO_FAN_CURVE] }]]);
+  });
+
+  it("restores Max and Off as well as curves after wake", async () => {
+    await start();
+    for (const duty of [100, 0]) {
+      if (duty) await fixture.componentInstance.fan_max();
+      else await fixture.componentInstance.fan_off();
+      await emit("system_power", false);
+      ipc.calls.reset();
+      await emit("system_power", true);
+      await flush();
+      expect(ipc).toHaveBeenCalledWith("set_fan_duty", { duty });
+      expect(ipc.calls.allArgs().some(([cmd]) => cmd === "set_custom_fan")).toBeFalse();
+    }
+  });
+
+  it("startup while the display is off remembers Auto without writing the fan", async () => {
+    hook = (cmd) => cmd === "fan_power_active" ? false : undefined;
+    await start();
+    assertMode("Auto", 0);
+    expect(ipc.calls.allArgs().some(([cmd]) => ["set_fan_duty", "set_custom_fan"].includes(cmd))).toBeFalse();
+    await emit("system_power", true);
+    await flush();
+    expect(ipc).toHaveBeenCalledWith("set_custom_fan", { temp: 48, array: [...AUTO_FAN_CURVE] });
+  });
+
+  it("a power notification during startup takes precedence over a stale initial query", async () => {
+    let finishQuery!: (value: boolean) => void;
+    const pending = new Promise<boolean>((resolve) => { finishQuery = resolve; });
+    hook = (cmd) => cmd === "fan_power_active" ? pending : undefined;
+    fixture.detectChanges();
+    await flush();
+    await emit("system_power", false);
+    finishQuery(true);
+    await flush();
+    assertMode("Auto", 0);
+    expect(ipc.calls.allArgs().some(([cmd]) => ["set_fan_duty", "set_custom_fan"].includes(cmd))).toBeFalse();
+    await emit("system_power", true);
+    await flush();
+    expect(ipc).toHaveBeenCalledWith("set_custom_fan", { temp: 48, array: [...AUTO_FAN_CURVE] });
+  });
+
+  it("an in-flight poll stops before reading RPM or writing hardware on screen-off", async () => {
+    await start();
+    let finishTemp!: (value: number) => void;
+    const pending = new Promise<number>((resolve) => { finishTemp = resolve; });
+    hook = (cmd) => cmd === "get_temps" ? pending : undefined;
+    ipc.calls.reset();
+    const poll = (fixture.componentInstance as any).poll();
+    await flush();
+    await emit("system_power", false);
+    finishTemp(48);
+    await poll;
+    expect(ipc.calls.allArgs().map(([cmd]) => cmd)).toEqual(["get_temps"]);
   });
 
   it("destroying main unregisters Apply and prevents further writes", async () => {

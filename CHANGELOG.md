@@ -1,5 +1,17 @@
 # Changelog
 
+## 3.1.9 — candidate, pending device acceptance
+
+- Return fan control to the EC firmware when the Windows session display turns off or the system suspends. This includes S0 Modern Standby, which cannot rely on ordinary S3 suspend events alone.
+- Block queued manual fan writes during the handoff and pause temperature/RPM polling while inactive.
+- Restore the selected Auto, Custom, Max or Off mode on interactive wake; background wakes with the display off keep firmware in control.
+- Discard temperature results sampled before sleep and handle initial screen-off state at application startup.
+- Limit the firmware handoff callback to a bounded EC operation; report command failure instead of claiming successful release.
+
+The handoff uses `ectool autofanctrl`; the firmware decides whether cooling is still needed. This does not change the Windows lid action or force the fan to zero. Turning the screen off while Windows remains awake also temporarily uses firmware fan control.
+
+Validation and the release status will be updated after Windows CI and manual lid/sleep/wake checks. Version 3.1.8 remains the published stable release until those checks pass.
+
 ## 3.1.8 — 2026-10-15
 
 Windows stability release, based on Chrultrabook Tools 3.1.7.
