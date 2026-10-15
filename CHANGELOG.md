@@ -10,7 +10,7 @@
 
 The handoff uses `ectool autofanctrl`; the firmware decides whether cooling is still needed. This does not change the Windows lid action or force the fan to zero. Turning the screen off while Windows remains awake also temporarily uses firmware fan control.
 
-Validation and the release status will be updated after Windows CI and manual lid/sleep/wake checks. Version 3.1.8 remains the published stable release until those checks pass.
+Validation: 64 browser regressions and 28 native Rust tests passed in Windows CI; Windows MSVC compilation and MSI/NSIS packaging passed in [build 38745855588](https://github.com/Fanqi-dev/Chrultrabook-Tools-Fixed/actions/runs/38745855588). Manual lid/sleep/wake acceptance is still pending. Version 3.1.8 remains the published stable release until those checks pass. See [SLEEP-VALIDATION](docs/SLEEP-VALIDATION.md) for the exact candidate source and executable digest.
 
 ## 3.1.8 — 2026-10-15
 
